@@ -64,9 +64,12 @@ class FinanceTrackerAPITester:
         """Test user registration with mock data creation"""
         print("\n🔍 Testing User Registration...")
         
+        # Use unique timestamp-based email
+        import time
+        timestamp = str(int(time.time()))
         test_user = {
             "name": "Test User",
-            "email": "test@example.com",
+            "email": f"test{timestamp}@example.com",
             "password": "test123"
         }
         
@@ -79,12 +82,33 @@ class FinanceTrackerAPITester:
         else:
             return self.log_test("User Registration", False, f"- Response: {response}")
 
+    def test_existing_user_login(self):
+        """Test login with existing user credentials"""
+        print("\n🔍 Testing Existing User Login...")
+        
+        login_data = {
+            "email": "testuser2607@example.com",
+            "password": "test123456"
+        }
+        
+        success, response = self.make_request('POST', 'auth/login', login_data, 200)
+        
+        if success and 'access_token' in response:
+            self.token = response['access_token']
+            self.user_data = response['user']
+            return self.log_test("Existing User Login", True, f"- Token received, User: {self.user_data['name']}")
+        else:
+            return self.log_test("Existing User Login", False, f"- Response: {response}")
+
     def test_user_login(self):
         """Test user login"""
         print("\n🔍 Testing User Login...")
         
+        # Use unique timestamp-based email
+        import time
+        timestamp = str(int(time.time()))
         login_data = {
-            "email": "test@example.com",
+            "email": f"test{timestamp}@example.com",
             "password": "test123"
         }
         
