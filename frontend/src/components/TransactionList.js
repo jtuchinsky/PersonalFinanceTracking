@@ -193,9 +193,9 @@ const TransactionList = () => {
                   <SelectValue placeholder="All accounts" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All accounts</SelectItem>
+                  <SelectItem value="all-accounts">All accounts</SelectItem>
                   {accounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>
+                    <SelectItem key={account.id} value={account.id || 'no-value'}>
                       {account.name}
                     </SelectItem>
                   ))}
@@ -211,9 +211,9 @@ const TransactionList = () => {
                   <SelectValue placeholder="All categories" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All categories</SelectItem>
+                  <SelectItem value="all-categories">All categories</SelectItem>
                   {categories.map((category) => (
-                    <SelectItem key={category.id} value={category.name}>
+                    <SelectItem key={category.id} value={category.name || 'no-value'}>
                       <div className="flex items-center space-x-2">
                         <div 
                           className="w-3 h-3 rounded-full" 
@@ -235,7 +235,7 @@ const TransactionList = () => {
                   <SelectValue placeholder="All types" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All types</SelectItem>
+                  <SelectItem value="all-types">All types</SelectItem>
                   <SelectItem value="credit">Income</SelectItem>
                   <SelectItem value="debit">Expense</SelectItem>
                 </SelectContent>
