@@ -182,11 +182,8 @@ const TransactionForm = () => {
                   </SelectTrigger>
                   <SelectContent>
                     {accounts.map((account) => (
-                      <SelectItem key={account.id} value={account.id}>
-                        <div className="flex items-center space-x-2">
-                          <span>{account.name}</span>
-                          <span className="text-gray-500">({account.bank_name})</span>
-                        </div>
+                      <SelectItem key={account.id} value={account.id || 'no-value'}>
+                        {account.name} ({account.bank_name})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -205,7 +202,7 @@ const TransactionForm = () => {
                   </SelectTrigger>
                   <SelectContent>
                     {categories.map((category) => (
-                      <SelectItem key={category.id} value={category.name}>
+                      <SelectItem key={category.id} value={category.name || 'no-value'}>
                         <div className="flex items-center space-x-2">
                           <div 
                             className="w-3 h-3 rounded-full" 
