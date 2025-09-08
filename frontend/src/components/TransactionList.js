@@ -87,9 +87,11 @@ const TransactionList = () => {
   };
 
   const handleFilterChange = (key, value) => {
+    // Convert "all-*" values to empty strings for backend compatibility
+    const processedValue = value?.startsWith('all-') ? '' : value;
     setFilters(prev => ({
       ...prev,
-      [key]: value
+      [key]: processedValue
     }));
   };
 
