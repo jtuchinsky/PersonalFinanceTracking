@@ -260,15 +260,19 @@ class FinanceTrackerAPITester:
         print("🚀 Starting Finance Tracker API Tests")
         print(f"📍 Testing against: {self.base_url}")
         
-        # Test registration and authentication
-        if not self.test_user_registration():
-            print("❌ Registration failed, stopping tests")
-            return False
-        
-        # Test login (using same credentials)
-        if not self.test_user_login():
-            print("❌ Login failed, stopping tests")
-            return False
+        # First try to login with existing user
+        if self.test_existing_user_login():
+            print("✅ Using existing user for tests")
+        else:
+            # If existing user login fails, try registration
+            if not self.test_user_registration():
+                print("❌ Registration failed, stopping tests")
+                return False
+            
+            # Test login (using same credentials)
+            if not self.test_user_login():
+                print("❌ Login failed, stopping tests")
+                return False
         
         # Test core endpoints
         self.test_get_accounts()
