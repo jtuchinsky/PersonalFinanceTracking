@@ -1,15 +1,18 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field
-from typing import List
+from pydantic import BaseModel, Field, EmailStr
+from typing import List, Optional
 import uuid
-from datetime import datetime
-
+from datetime import datetime, timezone, timedelta
+import jwt
+import bcrypt
+from decimal import Decimal
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -19,38 +22,317 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
+# JWT settings
+JWT_SECRET = os.environ.get("JWT_SECRET", "your-secret-key-here")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24
+
 # Create the main app without a prefix
-app = FastAPI()
+app = FastAPI(title="Personal Finance Tracker API")
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
+# Security
+security = HTTPBearer()
 
-# Define Models
-class StatusCheck(BaseModel):
+# Pydantic Models
+class User(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    email: EmailStr
+    name: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+class UserCreate(BaseModel):
+    email: EmailStr
+    name: str
+    password: str
 
-# Add your routes to the router instead of directly to app
-@api_router.get("/")
-async def root():
-    return {"message": "Hello World"}
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.dict()
-    status_obj = StatusCheck(**status_dict)
-    _ = await db.status_checks.insert_one(status_obj.dict())
-    return status_obj
+class Account(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    name: str
+    account_type: str  # checking, savings, credit_card
+    bank_name: str
+    balance: float
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    status_checks = await db.status_checks.find().to_list(1000)
-    return [StatusCheck(**status_check) for status_check in status_checks]
+class Transaction(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    account_id: str
+    amount: float
+    description: str
+    category: str
+    transaction_type: str  # debit, credit
+    date: datetime
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class TransactionCreate(BaseModel):
+    account_id: str
+    amount: float
+    description: str
+    category: str
+    transaction_type: str
+    date: datetime
+
+class Category(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    color: str
+    icon: str
+
+class DashboardData(BaseModel):
+    total_balance: float
+    monthly_spending: float
+    accounts: List[Account]
+    recent_transactions: List[Transaction]
+    category_spending: dict
+
+# Helper functions
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+
+def create_access_token(user_id: str, email: str) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
+    payload = {"user_id": user_id, "email": email, "exp": expire}
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user_id = payload.get("user_id")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return user_id
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+# Initialize default categories
+DEFAULT_CATEGORIES = [
+    {"name": "Food & Dining", "color": "#ef4444", "icon": "UtensilsCrossed"},
+    {"name": "Transportation", "color": "#3b82f6", "icon": "Car"},
+    {"name": "Bills & Utilities", "color": "#f59e0b", "icon": "Receipt"},
+    {"name": "Shopping", "color": "#8b5cf6", "icon": "ShoppingBag"},
+    {"name": "Entertainment", "color": "#06b6d4", "icon": "Film"},
+    {"name": "Healthcare", "color": "#10b981", "icon": "Heart"},
+    {"name": "Income", "color": "#059669", "icon": "TrendingUp"},
+    {"name": "Other", "color": "#6b7280", "icon": "MoreHorizontal"}
+]
+
+# Auth routes
+@api_router.post("/auth/register")
+async def register(user_data: UserCreate):
+    # Check if user already exists
+    existing_user = await db.users.find_one({"email": user_data.email})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Create user
+    hashed_password = hash_password(user_data.password)
+    user = User(email=user_data.email, name=user_data.name)
+    user_dict = user.model_dump()
+    user_dict["password"] = hashed_password
+    
+    await db.users.insert_one(user_dict)
+    
+    # Create default accounts with mock data
+    accounts = [
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": user.id,
+            "name": "TD Bank Checking",
+            "account_type": "checking",
+            "bank_name": "TD Bank",
+            "balance": 2543.67,
+            "created_at": datetime.now(timezone.utc)
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": user.id,
+            "name": "TD Bank Savings",
+            "account_type": "savings", 
+            "bank_name": "TD Bank",
+            "balance": 12847.23,
+            "created_at": datetime.now(timezone.utc)
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": user.id,
+            "name": "Chase Freedom Credit Card",
+            "account_type": "credit_card",
+            "bank_name": "Chase",
+            "balance": -876.45,
+            "created_at": datetime.now(timezone.utc)
+        }
+    ]
+    
+    await db.accounts.insert_many(accounts)
+    
+    # Initialize categories for user
+    categories = [
+        {**cat, "id": str(uuid.uuid4()), "user_id": user.id} 
+        for cat in DEFAULT_CATEGORIES
+    ]
+    await db.categories.insert_many(categories)
+    
+    # Create sample transactions
+    sample_transactions = [
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": user.id,
+            "account_id": accounts[0]["id"],
+            "amount": -45.67,
+            "description": "Grocery Store",
+            "category": "Food & Dining",
+            "transaction_type": "debit",
+            "date": datetime.now(timezone.utc) - timedelta(days=1),
+            "created_at": datetime.now(timezone.utc)
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": user.id,
+            "account_id": accounts[0]["id"],
+            "amount": -25.00,
+            "description": "Gas Station",
+            "category": "Transportation",
+            "transaction_type": "debit",
+            "date": datetime.now(timezone.utc) - timedelta(days=2),
+            "created_at": datetime.now(timezone.utc)
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": user.id,
+            "account_id": accounts[1]["id"],
+            "amount": 2500.00,
+            "description": "Salary Deposit",
+            "category": "Income",
+            "transaction_type": "credit",
+            "date": datetime.now(timezone.utc) - timedelta(days=3),
+            "created_at": datetime.now(timezone.utc)
+        }
+    ]
+    
+    await db.transactions.insert_many(sample_transactions)
+    
+    # Generate token
+    token = create_access_token(user.id, user.email)
+    
+    return {"access_token": token, "token_type": "bearer", "user": user}
+
+@api_router.post("/auth/login")
+async def login(login_data: UserLogin):
+    user = await db.users.find_one({"email": login_data.email})
+    if not user or not verify_password(login_data.password, user["password"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    token = create_access_token(user["id"], user["email"])
+    user_obj = User(**{k: v for k, v in user.items() if k != "password"})
+    
+    return {"access_token": token, "token_type": "bearer", "user": user_obj}
+
+# Dashboard route
+@api_router.get("/dashboard", response_model=DashboardData)
+async def get_dashboard(user_id: str = Depends(get_current_user)):
+    # Get accounts
+    accounts = await db.accounts.find({"user_id": user_id}).to_list(length=None)
+    account_objects = [Account(**account) for account in accounts]
+    
+    # Calculate total balance
+    total_balance = sum(account.balance for account in account_objects)
+    
+    # Get recent transactions (last 10)
+    transactions = await db.transactions.find(
+        {"user_id": user_id}
+    ).sort("date", -1).limit(10).to_list(length=None)
+    transaction_objects = [Transaction(**transaction) for transaction in transactions]
+    
+    # Calculate monthly spending (current month debits)
+    current_month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    monthly_transactions = await db.transactions.find({
+        "user_id": user_id,
+        "transaction_type": "debit",
+        "date": {"$gte": current_month_start}
+    }).to_list(length=None)
+    
+    monthly_spending = abs(sum(t["amount"] for t in monthly_transactions))
+    
+    # Calculate category spending
+    category_spending = {}
+    for transaction in monthly_transactions:
+        category = transaction["category"]
+        category_spending[category] = category_spending.get(category, 0) + abs(transaction["amount"])
+    
+    return DashboardData(
+        total_balance=total_balance,
+        monthly_spending=monthly_spending,
+        accounts=account_objects,
+        recent_transactions=transaction_objects,
+        category_spending=category_spending
+    )
+
+# Account routes
+@api_router.get("/accounts", response_model=List[Account])
+async def get_accounts(user_id: str = Depends(get_current_user)):
+    accounts = await db.accounts.find({"user_id": user_id}).to_list(length=None)
+    return [Account(**account) for account in accounts]
+
+# Transaction routes
+@api_router.get("/transactions", response_model=List[Transaction])
+async def get_transactions(
+    user_id: str = Depends(get_current_user),
+    account_id: Optional[str] = None,
+    category: Optional[str] = None,
+    limit: int = 50
+):
+    query = {"user_id": user_id}
+    if account_id:
+        query["account_id"] = account_id
+    if category:
+        query["category"] = category
+    
+    transactions = await db.transactions.find(query).sort("date", -1).limit(limit).to_list(length=None)
+    return [Transaction(**transaction) for transaction in transactions]
+
+@api_router.post("/transactions", response_model=Transaction)
+async def create_transaction(
+    transaction_data: TransactionCreate,
+    user_id: str = Depends(get_current_user)
+):
+    # Verify account belongs to user
+    account = await db.accounts.find_one({"id": transaction_data.account_id, "user_id": user_id})
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    
+    transaction = Transaction(
+        user_id=user_id,
+        **transaction_data.model_dump()
+    )
+    
+    transaction_dict = transaction.model_dump()
+    await db.transactions.insert_one(transaction_dict)
+    
+    # Update account balance
+    balance_change = transaction.amount if transaction.transaction_type == "credit" else -abs(transaction.amount)
+    await db.accounts.update_one(
+        {"id": transaction.account_id},
+        {"$inc": {"balance": balance_change}}
+    )
+    
+    return transaction
+
+# Category routes
+@api_router.get("/categories", response_model=List[Category])
+async def get_categories(user_id: str = Depends(get_current_user)):
+    categories = await db.categories.find({"user_id": user_id}).to_list(length=None)
+    return [Category(**category) for category in categories]
 
 # Include the router in the main app
 app.include_router(api_router)
