@@ -327,6 +327,94 @@ async def get_accounts(user_id: str = Depends(get_current_user)):
     accounts = await db.accounts.find({"user_id": user_id}).to_list(length=None)
     return [Account(**account) for account in accounts]
 
+@api_router.post("/accounts", response_model=Account)
+async def create_account(
+    account_data: AccountCreate,
+    user_id: str = Depends(get_current_user)
+):
+    # Create new account
+    account = Account(
+        user_id=user_id,
+        name=account_data.name,
+        account_type=account_data.account_type,
+        bank_name=account_data.bank_name,
+        balance=account_data.initial_balance,
+        nickname=account_data.nickname,
+        description=account_data.description,
+        is_default=False
+    )
+    
+    account_dict = account.model_dump()
+    
+    # Store encrypted credentials separately (not in the account model)
+    credentials = {
+        "account_id": account.id,
+        "user_id": user_id,
+        "encrypted_username": encrypt_credential(account_data.account_username),
+        "encrypted_password": encrypt_credential(account_data.account_password),
+        "created_at": datetime.now(timezone.utc)
+    }
+    
+    # Insert account and credentials
+    await db.accounts.insert_one(account_dict)
+    await db.account_credentials.insert_one(credentials)
+    
+    return account
+
+@api_router.delete("/accounts/{account_id}")
+async def delete_account(
+    account_id: str,
+    user_id: str = Depends(get_current_user)
+):
+    # Check if account belongs to user
+    account = await db.accounts.find_one({"id": account_id, "user_id": user_id})
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    
+    # Check if account has transactions
+    transaction_count = await db.transactions.count_documents({"account_id": account_id})
+    if transaction_count > 0:
+        raise HTTPException(
+            status_code=400, 
+            detail="Cannot delete account with existing transactions. Please delete transactions first."
+        )
+    
+    # Delete account and its credentials
+    await db.accounts.delete_one({"id": account_id, "user_id": user_id})
+    await db.account_credentials.delete_one({"account_id": account_id, "user_id": user_id})
+    
+    return {"message": "Account deleted successfully"}
+
+@api_router.put("/accounts/{account_id}", response_model=Account)
+async def update_account(
+    account_id: str,
+    account_update: AccountUpdate,
+    user_id: str = Depends(get_current_user)
+):
+    # Check if account belongs to user
+    account = await db.accounts.find_one({"id": account_id, "user_id": user_id})
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    
+    # Prepare update data
+    update_data = {}
+    if account_update.name is not None:
+        update_data["name"] = account_update.name
+    if account_update.nickname is not None:
+        update_data["nickname"] = account_update.nickname
+    if account_update.description is not None:
+        update_data["description"] = account_update.description
+    
+    if update_data:
+        await db.accounts.update_one(
+            {"id": account_id, "user_id": user_id},
+            {"$set": update_data}
+        )
+    
+    # Return updated account
+    updated_account = await db.accounts.find_one({"id": account_id, "user_id": user_id})
+    return Account(**updated_account)
+
 # Transaction routes
 @api_router.get("/transactions", response_model=List[Transaction])
 async def get_transactions(
