@@ -15,7 +15,8 @@ import {
   Wallet,
   LogOut,
   List,
-  BarChart3
+  BarChart3,
+  Settings
 } from 'lucide-react';
 
 const Dashboard = () => {
