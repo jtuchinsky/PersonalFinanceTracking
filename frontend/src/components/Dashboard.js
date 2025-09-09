@@ -117,6 +117,12 @@ const Dashboard = () => {
                   View All
                 </Button>
               </Link>
+              <Link to="/manage-accounts">
+                <Button variant="outline">
+                  <Settings className="w-4 h-4 mr-2" />
+                  Manage Accounts
+                </Button>
+              </Link>
               <Button variant="outline" onClick={logout}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
