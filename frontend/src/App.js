@@ -111,6 +111,18 @@ function App() {
               element={user ? <TransactionForm /> : <Navigate to="/login" />} 
             />
             <Route 
+              path="/add-account" 
+              element={user ? <AddAccount /> : <Navigate to="/login" />} 
+            />
+            <Route 
+              path="/manage-accounts" 
+              element={user ? <AccountManager /> : <Navigate to="/login" />} 
+            />
+            <Route 
+              path="/edit-account/:accountId" 
+              element={user ? <EditAccount /> : <Navigate to="/login" />} 
+            />
+            <Route 
               path="/" 
               element={<Navigate to={user ? "/dashboard" : "/login"} />} 
             />
