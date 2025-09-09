@@ -231,6 +231,143 @@ class FinanceTrackerAPITester:
         else:
             return self.log_test("Get Transactions with Filters", False, f"- Response: {response}")
 
+    def test_create_account(self):
+        """Test creating a new account with encrypted credentials"""
+        print("\n🔍 Testing Create Account...")
+        
+        account_data = {
+            "name": "Test Bank Account",
+            "account_type": "checking",
+            "bank_name": "Test Bank",
+            "nickname": "My Test Account",
+            "description": "Test account for API testing",
+            "account_username": "testuser123",
+            "account_password": "testpass456",
+            "initial_balance": 1000.00
+        }
+        
+        success, response = self.make_request('POST', 'accounts', account_data, 200)
+        
+        if success and 'id' in response:
+            # Verify account fields
+            expected_fields = ['id', 'name', 'account_type', 'bank_name', 'balance', 'nickname', 'description', 'is_default']
+            has_all_fields = all(field in response for field in expected_fields)
+            
+            if has_all_fields and response['balance'] == 1000.00 and response['is_default'] == False:
+                self.accounts.append(response)  # Add to accounts list for later tests
+                return self.log_test("Create Account", True, f"- Account ID: {response['id']}, Balance: ${response['balance']}")
+            else:
+                return self.log_test("Create Account", False, f"- Missing fields or incorrect data: {response}")
+        else:
+            return self.log_test("Create Account", False, f"- Response: {response}")
+
+    def test_update_account(self):
+        """Test updating account details"""
+        print("\n🔍 Testing Update Account...")
+        
+        # Find a user-created account (not default)
+        user_account = None
+        for account in self.accounts:
+            if not account.get('is_default', True):
+                user_account = account
+                break
+        
+        if not user_account:
+            return self.log_test("Update Account", False, "- No user-created account found to update")
+        
+        update_data = {
+            "name": "Updated Test Account",
+            "nickname": "Updated Nickname",
+            "description": "Updated description for testing"
+        }
+        
+        success, response = self.make_request('PUT', f'accounts/{user_account["id"]}', update_data, 200)
+        
+        if success and response.get('name') == update_data['name']:
+            return self.log_test("Update Account", True, f"- Updated account: {response['name']}")
+        else:
+            return self.log_test("Update Account", False, f"- Response: {response}")
+
+    def test_delete_account_with_transactions(self):
+        """Test deleting account that has transactions (should fail)"""
+        print("\n🔍 Testing Delete Account with Transactions...")
+        
+        # Try to delete a default account that should have transactions
+        default_account = None
+        for account in self.accounts:
+            if account.get('is_default', False):
+                default_account = account
+                break
+        
+        if not default_account:
+            return self.log_test("Delete Account with Transactions", False, "- No default account found")
+        
+        success, response = self.make_request('DELETE', f'accounts/{default_account["id"]}', expected_status=400)
+        
+        if success and 'Cannot delete account with existing transactions' in response.get('detail', ''):
+            return self.log_test("Delete Account with Transactions", True, "- Correctly prevented deletion")
+        else:
+            return self.log_test("Delete Account with Transactions", False, f"- Should prevent deletion: {response}")
+
+    def test_delete_account_without_transactions(self):
+        """Test deleting account without transactions (should succeed)"""
+        print("\n🔍 Testing Delete Account without Transactions...")
+        
+        # Find a user-created account without transactions
+        user_account = None
+        for account in self.accounts:
+            if not account.get('is_default', True):
+                user_account = account
+                break
+        
+        if not user_account:
+            return self.log_test("Delete Account without Transactions", False, "- No user-created account found")
+        
+        success, response = self.make_request('DELETE', f'accounts/{user_account["id"]}', expected_status=200)
+        
+        if success and 'deleted successfully' in response.get('message', ''):
+            return self.log_test("Delete Account without Transactions", True, "- Account deleted successfully")
+        else:
+            return self.log_test("Delete Account without Transactions", False, f"- Response: {response}")
+
+    def test_account_security(self):
+        """Test account security - verify credentials are encrypted"""
+        print("\n🔍 Testing Account Security...")
+        
+        # Get accounts and verify no plain text credentials are returned
+        success, response = self.make_request('GET', 'accounts', expected_status=200)
+        
+        if success and isinstance(response, list):
+            # Check that no account contains plain text credentials
+            has_credentials = any('account_username' in account or 'account_password' in account for account in response)
+            
+            if not has_credentials:
+                return self.log_test("Account Security", True, "- No plain text credentials in account data")
+            else:
+                return self.log_test("Account Security", False, "- Plain text credentials found in response")
+        else:
+            return self.log_test("Account Security", False, f"- Could not verify security: {response}")
+
+    def test_account_fields_validation(self):
+        """Test account creation with enhanced fields"""
+        print("\n🔍 Testing Account Fields Validation...")
+        
+        # Get accounts and verify new fields are present
+        success, response = self.make_request('GET', 'accounts', expected_status=200)
+        
+        if success and isinstance(response, list) and len(response) > 0:
+            account = response[0]
+            required_fields = ['nickname', 'description', 'is_default']
+            has_new_fields = all(field in account for field in required_fields)
+            
+            if has_new_fields:
+                return self.log_test("Account Fields Validation", True, "- All new fields present in account data")
+            else:
+                missing = [field for field in required_fields if field not in account]
+                return self.log_test("Account Fields Validation", False, f"- Missing fields: {missing}")
+        else:
+            return self.log_test("Account Fields Validation", False, f"- No accounts found: {response}")
+
     def test_invalid_endpoints(self):
         """Test error handling for invalid requests"""
         print("\n🔍 Testing Error Handling...")
@@ -251,9 +388,22 @@ class FinanceTrackerAPITester:
         self.token = old_token
         
         if success:
-            return self.log_test("Unauthorized Access Error", True, "- Correctly returned 403")
+            self.log_test("Unauthorized Access Error", True, "- Correctly returned 403")
         else:
-            return self.log_test("Unauthorized Access Error", False, "- Should return 403 for unauthorized access")
+            self.log_test("Unauthorized Access Error", False, "- Should return 403 for unauthorized access")
+        
+        # Test invalid account creation
+        invalid_account = {
+            "name": "",  # Empty name should fail
+            "account_type": "invalid_type",
+            "bank_name": "Test Bank"
+        }
+        success, _ = self.make_request('POST', 'accounts', invalid_account, 422)
+        
+        if success:
+            return self.log_test("Invalid Account Creation", True, "- Correctly returned 422 for invalid data")
+        else:
+            return self.log_test("Invalid Account Creation", False, "- Should return 422 for invalid account data")
 
     def run_all_tests(self):
         """Run all API tests"""
