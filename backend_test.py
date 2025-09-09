@@ -428,6 +428,16 @@ class FinanceTrackerAPITester:
         self.test_get_accounts()
         self.test_get_categories()
         self.test_dashboard_data()
+        
+        # Test new account management features
+        self.test_create_account()
+        self.test_account_fields_validation()
+        self.test_account_security()
+        self.test_update_account()
+        self.test_delete_account_with_transactions()
+        self.test_delete_account_without_transactions()
+        
+        # Test transactions
         self.test_create_transaction()
         self.test_get_transactions()
         self.test_get_transactions_with_filters()
