@@ -13,6 +13,8 @@ from datetime import datetime, timezone, timedelta
 import jwt
 import bcrypt
 from decimal import Decimal
+from cryptography.fernet import Fernet
+import base64
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
