@@ -29,6 +29,12 @@ JWT_SECRET = os.environ.get("JWT_SECRET", "finance-tracker-secret-key-2025")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
+# Encryption settings for account credentials
+ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY", "finance-tracker-encryption-key-2025")
+# Generate a proper Fernet key from the encryption key
+fernet_key = base64.urlsafe_b64encode(ENCRYPTION_KEY.ljust(32)[:32].encode())
+cipher_suite = Fernet(fernet_key)
+
 # Create the main app without a prefix
 app = FastAPI(title="Personal Finance Tracker API")
 
