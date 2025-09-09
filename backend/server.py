@@ -186,6 +186,9 @@ async def register(user_data: UserCreate):
             "account_type": "checking",
             "bank_name": "TD Bank",
             "balance": 2543.67,
+            "nickname": "My Checking",
+            "description": "Primary checking account for daily expenses",
+            "is_default": True,
             "created_at": datetime.now(timezone.utc)
         },
         {
@@ -195,6 +198,9 @@ async def register(user_data: UserCreate):
             "account_type": "savings", 
             "bank_name": "TD Bank",
             "balance": 12847.23,
+            "nickname": "Emergency Fund",
+            "description": "High-yield savings account for emergencies",
+            "is_default": True,
             "created_at": datetime.now(timezone.utc)
         },
         {
@@ -204,6 +210,9 @@ async def register(user_data: UserCreate):
             "account_type": "credit_card",
             "bank_name": "Chase",
             "balance": -876.45,
+            "nickname": "Rewards Card",
+            "description": "Credit card with cashback rewards",
+            "is_default": True,
             "created_at": datetime.now(timezone.utc)
         }
     ]
