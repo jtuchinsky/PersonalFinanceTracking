@@ -61,7 +61,25 @@ class Account(BaseModel):
     account_type: str  # checking, savings, credit_card
     bank_name: str
     balance: float
+    nickname: Optional[str] = None
+    description: Optional[str] = None
+    is_default: bool = False  # True for system-created mock accounts
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class AccountCreate(BaseModel):
+    name: str
+    account_type: str
+    bank_name: str
+    nickname: Optional[str] = None
+    description: Optional[str] = None
+    account_username: str
+    account_password: str
+    initial_balance: float = 0.0
+
+class AccountUpdate(BaseModel):
+    name: Optional[str] = None
+    nickname: Optional[str] = None  
+    description: Optional[str] = None
 
 class Transaction(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
