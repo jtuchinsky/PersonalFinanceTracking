@@ -141,6 +141,14 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+def encrypt_credential(credential: str) -> str:
+    """Encrypt account credentials"""
+    return cipher_suite.encrypt(credential.encode()).decode()
+
+def decrypt_credential(encrypted_credential: str) -> str:
+    """Decrypt account credentials"""
+    return cipher_suite.decrypt(encrypted_credential.encode()).decode()
+
 # Initialize default categories
 DEFAULT_CATEGORIES = [
     {"name": "Food & Dining", "color": "#ef4444", "icon": "UtensilsCrossed"},
