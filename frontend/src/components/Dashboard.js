@@ -182,17 +182,31 @@ const Dashboard = () => {
                   <div className={`w-12 h-12 bg-gradient-to-br ${getAccountColor(account.account_type)} rounded-xl flex items-center justify-center text-white`}>
                     {getAccountIcon(account.account_type)}
                   </div>
-                  <div>
-                    <CardTitle className="text-lg">{account.name}</CardTitle>
-                    <CardDescription className="capitalize">{account.bank_name} • {account.account_type.replace('_', ' ')}</CardDescription>
+                  <div className="flex-1 min-w-0">
+                    <CardTitle className="text-lg truncate">
+                      {account.nickname || account.name}
+                    </CardTitle>
+                    <CardDescription className="capitalize">
+                      {account.bank_name} • {account.account_type.replace('_', ' ')}
+                    </CardDescription>
+                    {account.nickname && account.nickname !== account.name && (
+                      <p className="text-xs text-gray-500 truncate mt-1">{account.name}</p>
+                    )}
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-right">
-                  <p className={`text-2xl font-bold ${account.balance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {formatCurrency(account.balance)}
-                  </p>
+                <div className="space-y-2">
+                  <div className="text-right">
+                    <p className={`text-2xl font-bold ${account.balance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {formatCurrency(account.balance)}
+                    </p>
+                  </div>
+                  {account.description && (
+                    <div className="bg-gray-50 rounded-lg p-2">
+                      <p className="text-xs text-gray-600 line-clamp-2">{account.description}</p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
