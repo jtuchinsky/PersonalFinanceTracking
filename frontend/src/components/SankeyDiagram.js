@@ -14,7 +14,7 @@ const SankeyDiagram = () => {
   const [categories, setCategories] = useState([]);
   const [viewMode, setViewMode] = useState('category'); // 'category' or 'bank'
   const [selectedItem, setSelectedItem] = useState(null);
-  const [hoveredItem, setHoveredItem] = useState(null);
+
   const [loading, setLoading] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
   const svgRef = useRef();
