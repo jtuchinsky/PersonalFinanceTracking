@@ -548,33 +548,44 @@ const SankeyDiagram = () => {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Sankey Diagram */}
+          {/* Flow Diagram */}
           <div className="lg:col-span-3">
-            <Card>
+            <Card className="relative overflow-hidden">
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
-                  <span>
-                    {viewMode === 'category' ? 'Category Flow' : 'Account Flow'} Diagram
+                  <span className="flex items-center space-x-2">
+                    <BarChart3 className="w-5 h-5 text-emerald-600" />
+                    <span>
+                      Money Flow {viewMode === 'category' ? 'by Category' : 'by Bank'}
+                    </span>
                   </span>
                   <div className="text-sm text-gray-600">
                     {transactions.length} transactions analyzed
                   </div>
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="relative">
+                {isAnimating && (
+                  <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
+                  </div>
+                )}
                 <div className="w-full overflow-x-auto">
                   <svg
                     ref={svgRef}
                     width={width}
                     height={height}
-                    className="border border-gray-200 rounded-lg"
+                    className="border border-gray-200 rounded-lg bg-gradient-to-br from-gray-50 to-white"
                   />
                 </div>
-                <div className="mt-4 text-sm text-gray-600">
-                  <p>
-                    <strong>How to use:</strong> Click on nodes to highlight them, hover over flows to see amounts. 
-                    Toggle between Category and Account views to see different perspectives of your money flow.
-                  </p>
+                <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                  <h4 className="font-semibold text-blue-900 mb-2">🎯 How It Works:</h4>
+                  <ul className="text-sm text-blue-800 space-y-1">
+                    <li>• <strong>Toggle Views:</strong> Use "By Category" / "By Bank" buttons to switch perspectives</li>
+                    <li>• <strong>Click Items:</strong> Click any income or expense item to switch to the alternate view</li>
+                    <li>• <strong>Flow Lines:</strong> Thickness represents money amounts flowing to/from your net worth</li>
+                    <li>• <strong>Central Box:</strong> Shows your net worth where all flows converge</li>
+                  </ul>
                 </div>
               </CardContent>
             </Card>
