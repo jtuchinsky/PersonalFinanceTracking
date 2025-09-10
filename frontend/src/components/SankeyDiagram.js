@@ -5,9 +5,8 @@ import { toast } from 'sonner';
 import { AuthContext } from '../App';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { ArrowLeft, BarChart3, Eye, ToggleLeft, ToggleRight } from 'lucide-react';
+import { ArrowLeft, BarChart3, Eye, PieChart, Building2, TrendingUp, TrendingDown } from 'lucide-react';
 import * as d3 from 'd3';
-import { sankey, sankeyLinkHorizontal } from 'd3-sankey';
 
 const SankeyDiagram = () => {
   const [transactions, setTransactions] = useState([]);
