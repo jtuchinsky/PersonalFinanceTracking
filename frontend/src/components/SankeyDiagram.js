@@ -420,20 +420,33 @@ const SankeyDiagram = () => {
           d3.select(this).attr("opacity", 0.8).attr("stroke-width", selectedItem === item.id ? 3 : 2);
         });
 
-      // Item label (to the right of circle)
+      // Item primary label (account name or category)
       itemGroup.append("text")
         .attr("x", item.x + 35)
-        .attr("y", item.y - 5)
+        .attr("y", item.y - 8)
         .attr("text-anchor", "start")
         .attr("font-size", "14px")
         .attr("font-weight", "600")
         .attr("fill", "#374151")
         .text(item.name);
 
-      // Item amount (below label)
+      // Item secondary label (account type for bank view, or bank name for account view)
+      if (item.accountType) {
+        const accountTypeLabel = item.accountType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+        itemGroup.append("text")
+          .attr("x", item.x + 35)
+          .attr("y", item.y + 5)
+          .attr("text-anchor", "start")
+          .attr("font-size", "11px")
+          .attr("font-weight", "400")
+          .attr("fill", "#6b7280")
+          .text(`${item.bankName} ${accountTypeLabel}`);
+      }
+
+      // Item amount (below labels)
       itemGroup.append("text")
         .attr("x", item.x + 35)
-        .attr("y", item.y + 10)
+        .attr("y", item.y + (item.accountType ? 20 : 10))
         .attr("text-anchor", "start")
         .attr("font-size", "12px")
         .attr("fill", "#16a34a")
