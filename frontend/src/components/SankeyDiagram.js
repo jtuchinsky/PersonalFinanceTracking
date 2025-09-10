@@ -356,7 +356,7 @@ const SankeyDiagram = () => {
       .style("filter", "drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1))")
       .style("cursor", "pointer")
       .on("click", function() {
-        setViewMode(viewMode === 'category' ? 'bank' : 'category');
+        handleViewToggle(viewMode === 'category' ? 'bank' : 'category');
       });
 
     // Balance box content
