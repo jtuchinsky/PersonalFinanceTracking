@@ -381,3 +381,26 @@ code {
     gap: 0.5rem;
   }
 }
+
+/* Sankey Diagram Styles */
+.sankey-tooltip {
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.sankey-node {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sankey-node:hover {
+  filter: brightness(1.1);
+}
+
+.sankey-link {
+  transition: all 0.2s ease;
+}
+
+.sankey-link:hover {
+  stroke-width: 2px !important;
+}
