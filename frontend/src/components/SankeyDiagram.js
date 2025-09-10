@@ -122,38 +122,56 @@ const SankeyDiagram = () => {
       return { incomeItems, expenseItems, totalIncome, totalExpenses, netWorth };
 
     } else {
-      // Group by banks
-      const incomeByBank = {};
-      const expensesByBank = {};
+      // Group by individual accounts
+      const incomeByAccount = {};
+      const expensesByAccount = {};
       
       transactions.forEach(transaction => {
         const account = accounts.find(acc => acc.id === transaction.account_id);
-        const bankName = account ? account.bank_name : 'Unknown Bank';
+        if (!account) return;
+        
+        const accountKey = account.id;
         const amount = Math.abs(transaction.amount);
         
         if (transaction.transaction_type === 'credit') {
-          incomeByBank[bankName] = (incomeByBank[bankName] || 0) + amount;
+          if (!incomeByAccount[accountKey]) {
+            incomeByAccount[accountKey] = {
+              account: account,
+              amount: 0
+            };
+          }
+          incomeByAccount[accountKey].amount += amount;
         } else {
-          expensesByBank[bankName] = (expensesByBank[bankName] || 0) + amount;
+          if (!expensesByAccount[accountKey]) {
+            expensesByAccount[accountKey] = {
+              account: account,
+              amount: 0
+            };
+          }
+          expensesByAccount[accountKey].amount += amount;
         }
       });
 
-      const incomeItems = Object.entries(incomeByBank).map(([bank, amount]) => ({
-        id: `income_${bank}`,
-        name: bank,
+      const incomeItems = Object.values(incomeByAccount).map(({ account, amount }) => ({
+        id: `income_${account.id}`,
+        name: account.nickname || account.name,
+        accountType: account.account_type,
+        bankName: account.bank_name,
         amount,
         type: 'income',
-        color: getBankColor(bank),
-        isBank: true
+        color: getAccountColor(account.account_type),
+        isBank: false
       }));
 
-      const expenseItems = Object.entries(expensesByBank).map(([bank, amount]) => ({
-        id: `expense_${bank}`,
-        name: bank,
+      const expenseItems = Object.values(expensesByAccount).map(({ account, amount }) => ({
+        id: `expense_${account.id}`,
+        name: account.nickname || account.name,
+        accountType: account.account_type,
+        bankName: account.bank_name,
         amount,
         type: 'expense',
-        color: getBankColor(bank),
-        isBank: true
+        color: getAccountColor(account.account_type),
+        isBank: false
       }));
 
       return { incomeItems, expenseItems, totalIncome, totalExpenses, netWorth };
