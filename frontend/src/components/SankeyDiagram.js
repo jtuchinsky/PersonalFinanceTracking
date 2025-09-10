@@ -393,7 +393,7 @@ const SankeyDiagram = () => {
         .style("cursor", "pointer")
         .on("click", function() {
           setSelectedItem(selectedItem === item.id ? null : item.id);
-          setViewMode(viewMode === 'category' ? 'bank' : 'category');
+          handleViewToggle(viewMode === 'category' ? 'bank' : 'category');
         })
         .on("mouseover", function() {
           setHoveredItem(item.id);
