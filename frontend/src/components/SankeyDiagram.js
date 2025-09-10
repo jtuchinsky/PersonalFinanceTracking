@@ -672,8 +672,8 @@ const SankeyDiagram = () => {
                       <span className="text-emerald-600 text-xs font-bold">1</span>
                     </div>
                     <div>
-                      <p className="font-semibold text-sm">Toggle Views</p>
-                      <p className="text-xs text-gray-600">Use header buttons to switch between Category and Bank views</p>
+                      <p className="font-semibold text-sm">Switch Views</p>
+                      <p className="text-xs text-gray-600">Use the header toggle button to switch between Category and Bank views</p>
                     </div>
                   </div>
                   
@@ -682,8 +682,8 @@ const SankeyDiagram = () => {
                       <span className="text-blue-600 text-xs font-bold">2</span>
                     </div>
                     <div>
-                      <p className="font-semibold text-sm">Click Items</p>
-                      <p className="text-xs text-gray-600">Click any income/expense item to auto-switch views</p>
+                      <p className="font-semibold text-sm">Select Items</p>
+                      <p className="text-xs text-gray-600">Click income/expense items to highlight and see details</p>
                     </div>
                   </div>
                   
@@ -692,8 +692,8 @@ const SankeyDiagram = () => {
                       <span className="text-purple-600 text-xs font-bold">3</span>
                     </div>
                     <div>
-                      <p className="font-semibold text-sm">Flow Lines</p>
-                      <p className="text-xs text-gray-600">Line thickness shows money amounts</p>
+                      <p className="font-semibold text-sm">Flow Visualization</p>
+                      <p className="text-xs text-gray-600">Line thickness represents money amounts flowing to/from center</p>
                     </div>
                   </div>
                   
@@ -702,8 +702,8 @@ const SankeyDiagram = () => {
                       <span className="text-amber-600 text-xs font-bold">4</span>
                     </div>
                     <div>
-                      <p className="font-semibold text-sm">Central Hub</p>
-                      <p className="text-xs text-gray-600">Click net worth box to switch views</p>
+                      <p className="font-semibold text-sm">Hover for Details</p>
+                      <p className="text-xs text-gray-600">Hover over flow lines to see transaction amounts</p>
                     </div>
                   </div>
                 </div>
