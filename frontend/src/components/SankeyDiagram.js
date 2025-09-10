@@ -629,14 +629,9 @@ const SankeyDiagram = () => {
                   </p>
                 </div>
                 <div className="text-center">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleViewToggle(viewMode === 'category' ? 'bank' : 'category')}
-                    className="w-full"
-                  >
-                    Switch to {viewMode === 'category' ? 'Bank' : 'Category'} View
-                  </Button>
+                  <p className="text-sm text-gray-600">
+                    Use the toggle button in the header to switch views
+                  </p>
                 </div>
               </CardContent>
             </Card>
