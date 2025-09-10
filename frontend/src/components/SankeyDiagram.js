@@ -596,10 +596,10 @@ const SankeyDiagram = () => {
                 <div className="mt-4 p-4 bg-blue-50 rounded-lg">
                   <h4 className="font-semibold text-blue-900 mb-2">🎯 How It Works:</h4>
                   <ul className="text-sm text-blue-800 space-y-1">
-                    <li>• <strong>Toggle Views:</strong> Use "By Category" / "By Bank" buttons to switch perspectives</li>
-                    <li>• <strong>Click Items:</strong> Click any income or expense item to switch to the alternate view</li>
+                    <li>• <strong>Switch Views:</strong> Use the header toggle button to switch between Category and Bank perspectives</li>
+                    <li>• <strong>Select Items:</strong> Click on income or expense items to highlight them</li>
                     <li>• <strong>Flow Lines:</strong> Thickness represents money amounts flowing to/from your net worth</li>
-                    <li>• <strong>Central Box:</strong> Shows your net worth where all flows converge</li>
+                    <li>• <strong>Hover Effects:</strong> Hover over flow lines to see detailed amounts</li>
                   </ul>
                 </div>
               </CardContent>
