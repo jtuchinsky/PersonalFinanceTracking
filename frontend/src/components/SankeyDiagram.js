@@ -518,18 +518,26 @@ const SankeyDiagram = () => {
                 <Button
                   variant={viewMode === 'category' ? 'default' : 'ghost'}
                   size="sm"
-                  onClick={() => setViewMode('category')}
-                  className={viewMode === 'category' ? 'bg-emerald-600 text-white' : ''}
+                  onClick={() => {
+                    setViewMode('category');
+                    setSelectedItem(null);
+                  }}
+                  className={`${viewMode === 'category' ? 'bg-emerald-600 text-white' : ''} transition-all duration-200`}
                 >
-                  Category View
+                  <PieChart className="w-4 h-4 mr-2" />
+                  By Category
                 </Button>
                 <Button
-                  variant={viewMode === 'account' ? 'default' : 'ghost'}
+                  variant={viewMode === 'bank' ? 'default' : 'ghost'}
                   size="sm"
-                  onClick={() => setViewMode('account')}
-                  className={viewMode === 'account' ? 'bg-emerald-600 text-white' : ''}
+                  onClick={() => {
+                    setViewMode('bank');
+                    setSelectedItem(null);
+                  }}
+                  className={`${viewMode === 'bank' ? 'bg-emerald-600 text-white' : ''} transition-all duration-200`}
                 >
-                  Account View
+                  <Building2 className="w-4 h-4 mr-2" />
+                  By Bank
                 </Button>
               </div>
             </div>
