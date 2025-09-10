@@ -302,7 +302,7 @@ const SankeyDiagram = () => {
         .attr("stroke", item.color)
         .attr("stroke-width", strokeWidth)
         .attr("fill", "none")
-        .attr("opacity", hoveredItem === item.id ? 0.9 : 0.6)
+        .attr("opacity", 0.6)
         .style("cursor", "pointer")
         .on("mouseover", function(event) {
           d3.select(this).attr("opacity", 0.9);
