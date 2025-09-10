@@ -642,7 +642,7 @@ const SankeyDiagram = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setViewMode(viewMode === 'category' ? 'bank' : 'category')}
+                    onClick={() => handleViewToggle(viewMode === 'category' ? 'bank' : 'category')}
                     className="w-full"
                   >
                     Switch to {viewMode === 'category' ? 'Bank' : 'Category'} View
