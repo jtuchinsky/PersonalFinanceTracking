@@ -638,6 +638,204 @@ async def get_categories(user_id: str = Depends(get_current_user)):
     categories = await db.categories.find({"user_id": user_id}).to_list(length=None)
     return [Category(**category) for category in categories]
 
+# Admin middleware
+async def get_admin_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    user_id = await get_current_user(credentials)
+    user = await db.users.find_one({"id": user_id})
+    
+    if not user or not user.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    return user_id
+
+# Admin routes
+@api_router.get("/admin/stats", response_model=AdminStats)
+async def get_admin_stats(admin_id: str = Depends(get_admin_user)):
+    # Get user statistics
+    total_users = await db.users.count_documents({})
+    active_users = await db.users.count_documents({"account_status": "active"})
+    locked_users = await db.users.count_documents({"account_status": "locked"})
+    deleted_users = await db.users.count_documents({"account_status": "deleted"})
+    
+    # Get account and transaction statistics
+    total_accounts = await db.accounts.count_documents({})
+    total_transactions = await db.transactions.count_documents({})
+    
+    # Get recent activities
+    recent_activities_data = await db.user_activities.find().sort("timestamp", -1).limit(20).to_list(length=None)
+    recent_activities = [UserActivity(**activity) for activity in recent_activities_data]
+    
+    await log_user_activity(admin_id, "admin_view_stats", "Admin viewed system statistics")
+    
+    return AdminStats(
+        total_users=total_users,
+        active_users=active_users,
+        locked_users=locked_users,
+        deleted_users=deleted_users,
+        total_accounts=total_accounts,
+        total_transactions=total_transactions,
+        recent_activities=recent_activities
+    )
+
+@api_router.get("/admin/users", response_model=List[UserManagement])
+async def get_all_users(admin_id: str = Depends(get_admin_user)):
+    users = await db.users.find().to_list(length=None)
+    user_list = []
+    
+    for user in users:
+        # Get user's account count and balance
+        user_accounts = await db.accounts.find({"user_id": user["id"]}).to_list(length=None)
+        total_accounts = len(user_accounts)
+        total_balance = sum(account.get("balance", 0) for account in user_accounts)
+        
+        # Get user's transaction count
+        total_transactions = await db.transactions.count_documents({"user_id": user["id"]})
+        
+        user_management = UserManagement(
+            id=user["id"],
+            email=user["email"],
+            name=user["name"],
+            account_status=user.get("account_status", "active"),
+            is_admin=user.get("is_admin", False),
+            total_accounts=total_accounts,
+            total_transactions=total_transactions,
+            total_balance=total_balance,
+            last_login=user.get("last_login"),
+            created_at=user["created_at"]
+        )
+        user_list.append(user_management)
+    
+    await log_user_activity(admin_id, "admin_view_users", "Admin viewed all users list")
+    
+    return user_list
+
+@api_router.post("/admin/users/{user_id}/lock")
+async def lock_user_account(user_id: str, admin_id: str = Depends(get_admin_user)):
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user.get("is_admin", False):
+        raise HTTPException(status_code=400, detail="Cannot lock admin accounts")
+    
+    # Update user status
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"account_status": "locked", "updated_at": datetime.now(timezone.utc)}}
+    )
+    
+    # Send email notification
+    templates = email_service.get_email_templates()
+    template = templates["account_locked"]
+    
+    email_body = template["body"].format(
+        user_name=user["name"],
+        user_email=user["email"],
+        action_date=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    )
+    
+    email_service.send_email(
+        to_email=user["email"],
+        subject=template["subject"],
+        body=email_body,
+        email_type="account_locked"
+    )
+    
+    await log_user_activity(admin_id, "admin_lock_user", f"Admin locked account for user {user['email']}")
+    await log_user_activity(user_id, "account_locked", "Account locked by administrator")
+    
+    return {"message": "User account locked successfully", "email_sent": True}
+
+@api_router.post("/admin/users/{user_id}/unlock")
+async def unlock_user_account(user_id: str, admin_id: str = Depends(get_admin_user)):
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update user status
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"account_status": "active", "updated_at": datetime.now(timezone.utc)}}
+    )
+    
+    # Send email notification
+    templates = email_service.get_email_templates()
+    template = templates["account_unlocked"]
+    
+    email_body = template["body"].format(
+        user_name=user["name"],
+        user_email=user["email"],
+        action_date=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    )
+    
+    email_service.send_email(
+        to_email=user["email"],
+        subject=template["subject"],
+        body=email_body,
+        email_type="account_unlocked"
+    )
+    
+    await log_user_activity(admin_id, "admin_unlock_user", f"Admin unlocked account for user {user['email']}")
+    await log_user_activity(user_id, "account_unlocked", "Account unlocked by administrator")
+    
+    return {"message": "User account unlocked successfully", "email_sent": True}
+
+@api_router.delete("/admin/users/{user_id}")
+async def delete_user_account(user_id: str, admin_id: str = Depends(get_admin_user)):
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user.get("is_admin", False):
+        raise HTTPException(status_code=400, detail="Cannot delete admin accounts")
+    
+    # Send email notification before deletion
+    templates = email_service.get_email_templates()
+    template = templates["account_deleted"]
+    
+    email_body = template["body"].format(
+        user_name=user["name"],
+        user_email=user["email"],
+        action_date=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    )
+    
+    email_service.send_email(
+        to_email=user["email"],
+        subject=template["subject"],
+        body=email_body,
+        email_type="account_deleted"
+    )
+    
+    # Mark user as deleted (soft delete)
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"account_status": "deleted", "updated_at": datetime.now(timezone.utc)}}
+    )
+    
+    # Optional: Also delete user's accounts and transactions (hard delete)
+    await db.accounts.delete_many({"user_id": user_id})
+    await db.transactions.delete_many({"user_id": user_id})
+    await db.categories.delete_many({"user_id": user_id})
+    
+    await log_user_activity(admin_id, "admin_delete_user", f"Admin deleted account for user {user['email']}")
+    await log_user_activity(user_id, "account_deleted", "Account deleted by administrator")
+    
+    return {"message": "User account deleted successfully", "email_sent": True}
+
+@api_router.get("/admin/activities")
+async def get_user_activities(admin_id: str = Depends(get_admin_user), limit: int = 100):
+    activities = await db.user_activities.find().sort("timestamp", -1).limit(limit).to_list(length=None)
+    
+    await log_user_activity(admin_id, "admin_view_activities", f"Admin viewed user activities (limit: {limit})")
+    
+    return [UserActivity(**activity) for activity in activities]
+
+@api_router.get("/admin/emails")
+async def get_sent_emails(admin_id: str = Depends(get_admin_user)):
+    await log_user_activity(admin_id, "admin_view_emails", "Admin viewed sent emails log")
+    
+    return {"sent_emails": email_service.sent_emails}
+
 # Include the router in the main app
 app.include_router(api_router)
 
