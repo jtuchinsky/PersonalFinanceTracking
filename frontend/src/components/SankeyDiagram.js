@@ -352,10 +352,7 @@ const SankeyDiagram = () => {
       .attr("stroke", data.netWorth >= 0 ? "#16a34a" : "#dc2626")
       .attr("stroke-width", 2)
       .style("filter", "drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1))")
-      .style("cursor", "pointer")
-      .on("click", function() {
-        handleViewToggle(viewMode === 'category' ? 'bank' : 'category');
-      });
+      .style("cursor", "default");
 
     // Balance box content
     balanceGroup.append("text")
