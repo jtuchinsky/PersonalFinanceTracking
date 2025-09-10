@@ -539,28 +539,25 @@ const SankeyDiagram = () => {
               </div>
             </div>
             
-            {/* View Toggle */}
+            {/* Current View Toggle */}
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
-                <Button
-                  variant={viewMode === 'category' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => handleViewToggle('category')}
-                  className={`${viewMode === 'category' ? 'bg-emerald-600 text-white' : ''} transition-all duration-200`}
-                >
-                  <PieChart className="w-4 h-4 mr-2" />
-                  By Category
-                </Button>
-                <Button
-                  variant={viewMode === 'bank' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => handleViewToggle('bank')}
-                  className={`${viewMode === 'bank' ? 'bg-emerald-600 text-white' : ''} transition-all duration-200`}
-                >
-                  <Building2 className="w-4 h-4 mr-2" />
-                  By Bank
-                </Button>
-              </div>
+              <div className="text-sm text-gray-600 font-medium">Current View:</div>
+              <Button
+                onClick={() => handleViewToggle(viewMode === 'category' ? 'bank' : 'category')}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white transition-all duration-200"
+              >
+                {viewMode === 'category' ? (
+                  <>
+                    <PieChart className="w-4 h-4 mr-2" />
+                    By Category
+                  </>
+                ) : (
+                  <>
+                    <Building2 className="w-4 h-4 mr-2" />
+                    By Bank
+                  </>
+                )}
+              </Button>
             </div>
           </div>
         </div>
