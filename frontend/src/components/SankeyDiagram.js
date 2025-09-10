@@ -41,7 +41,7 @@ const SankeyDiagram = () => {
       }, 200);
       return () => clearTimeout(timer);
     }
-  }, [transactions, accounts, categories, viewMode, selectedItem, hoveredItem]);
+  }, [transactions, accounts, categories, viewMode, selectedItem]);
 
   const fetchData = async () => {
     try {
