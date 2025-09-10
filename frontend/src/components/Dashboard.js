@@ -118,6 +118,12 @@ const Dashboard = () => {
                   View All
                 </Button>
               </Link>
+              <Link to="/analytics">
+                <Button variant="outline">
+                  <Activity className="w-4 h-4 mr-2" />
+                  Analytics
+                </Button>
+              </Link>
               <Link to="/manage-accounts">
                 <Button variant="outline">
                   <Settings className="w-4 h-4 mr-2" />
