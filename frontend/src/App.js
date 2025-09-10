@@ -129,6 +129,10 @@ function App() {
               element={user ? <SankeyDiagram /> : <Navigate to="/login" />} 
             />
             <Route 
+              path="/admin" 
+              element={user && user.is_admin ? <AdminDashboard /> : <Navigate to="/login" />} 
+            />
+            <Route 
               path="/" 
               element={<Navigate to={user ? "/dashboard" : "/login"} />} 
             />
