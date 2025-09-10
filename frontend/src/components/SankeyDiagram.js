@@ -305,7 +305,6 @@ const SankeyDiagram = () => {
         .attr("opacity", hoveredItem === item.id ? 0.9 : 0.6)
         .style("cursor", "pointer")
         .on("mouseover", function(event) {
-          setHoveredItem(item.id);
           d3.select(this).attr("opacity", 0.9);
           
           // Show tooltip
@@ -328,7 +327,6 @@ const SankeyDiagram = () => {
           .style("top", (event.pageY - 10) + "px");
         })
         .on("mouseout", function() {
-          setHoveredItem(null);
           d3.select(this).attr("opacity", 0.6);
           d3.selectAll(".sankey-tooltip").remove();
         })
