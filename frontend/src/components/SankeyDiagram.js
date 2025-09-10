@@ -703,37 +703,63 @@ const SankeyDiagram = () => {
             {/* Quick Stats */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Quick Stats</CardTitle>
+                <CardTitle className="text-lg flex items-center">
+                  <TrendingUp className="w-5 h-5 mr-2 text-emerald-600" />
+                  Financial Summary
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="bg-emerald-50 rounded-lg p-3">
-                  <p className="text-sm text-emerald-700">Total Income</p>
-                  <p className="text-lg font-bold text-emerald-800">
-                    {formatCurrency(
-                      transactions
-                        .filter(t => t.transaction_type === 'credit')
-                        .reduce((sum, t) => sum + Math.abs(t.amount), 0)
-                    )}
-                  </p>
+                <div className="bg-gradient-to-r from-emerald-50 to-emerald-100 rounded-lg p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-emerald-700 font-medium">💰 Total Income</p>
+                      <p className="text-lg font-bold text-emerald-800">
+                        {formatCurrency(
+                          transactions
+                            .filter(t => t.transaction_type === 'credit')
+                            .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+                        )}
+                      </p>
+                    </div>
+                    <TrendingUp className="w-6 h-6 text-emerald-600" />
+                  </div>
                 </div>
-                <div className="bg-red-50 rounded-lg p-3">
-                  <p className="text-sm text-red-700">Total Expenses</p>
-                  <p className="text-lg font-bold text-red-800">
-                    {formatCurrency(
-                      transactions
-                        .filter(t => t.transaction_type === 'debit')
-                        .reduce((sum, t) => sum + Math.abs(t.amount), 0)
-                    )}
-                  </p>
+                
+                <div className="bg-gradient-to-r from-red-50 to-red-100 rounded-lg p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-red-700 font-medium">💸 Total Expenses</p>
+                      <p className="text-lg font-bold text-red-800">
+                        {formatCurrency(
+                          transactions
+                            .filter(t => t.transaction_type === 'debit')
+                            .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+                        )}
+                      </p>
+                    </div>
+                    <TrendingDown className="w-6 h-6 text-red-600" />
+                  </div>
                 </div>
-                <div className="bg-blue-50 rounded-lg p-3">
-                  <p className="text-sm text-blue-700">Net Flow</p>
-                  <p className="text-lg font-bold text-blue-800">
-                    {formatCurrency(
-                      transactions.reduce((sum, t) => 
-                        sum + (t.transaction_type === 'credit' ? t.amount : -Math.abs(t.amount)), 0
-                      )
-                    )}
+                
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-100 rounded-lg p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-blue-700 font-medium">📊 Net Flow</p>
+                      <p className="text-lg font-bold text-blue-800">
+                        {formatCurrency(
+                          transactions.reduce((sum, t) => 
+                            sum + (t.transaction_type === 'credit' ? t.amount : -Math.abs(t.amount)), 0
+                          )
+                        )}
+                      </p>
+                    </div>
+                    <BarChart3 className="w-6 h-6 text-blue-600" />
+                  </div>
+                </div>
+                
+                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                  <p className="text-xs text-gray-600 text-center">
+                    📈 Data from {transactions.length} recent transactions
                   </p>
                 </div>
               </CardContent>
