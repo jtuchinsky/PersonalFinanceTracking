@@ -434,7 +434,7 @@ const SankeyDiagram = () => {
         .attr("fill", item.color)
         .attr("stroke", selectedItem === item.id ? "#000" : "#fff")
         .attr("stroke-width", selectedItem === item.id ? 3 : 2)
-        .attr("opacity", hoveredItem === item.id ? 1.0 : 0.8);
+        .attr("opacity", 0.8);
 
       // Item label (to the left of circle)
       itemGroup.append("text")
