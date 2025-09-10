@@ -593,8 +593,41 @@ const SankeyDiagram = () => {
 
           {/* Info Panel */}
           <div className="space-y-6">
-            {/* Selected Node Info */}
-            {selectedNode && (
+            {/* Current View Info */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center">
+                  {viewMode === 'category' ? <PieChart className="w-5 h-5 mr-2" /> : <Building2 className="w-5 h-5 mr-2" />}
+                  Current View
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="bg-gradient-to-r from-emerald-50 to-blue-50 rounded-lg p-3">
+                  <p className="font-semibold text-gray-900">
+                    {viewMode === 'category' ? '📊 By Category' : '🏦 By Bank'}
+                  </p>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {viewMode === 'category' 
+                      ? 'Grouped by expense and income categories'
+                      : 'Grouped by financial institutions'
+                    }
+                  </p>
+                </div>
+                <div className="text-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setViewMode(viewMode === 'category' ? 'bank' : 'category')}
+                    className="w-full"
+                  >
+                    Switch to {viewMode === 'category' ? 'Bank' : 'Category'} View
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Selected Item Info */}
+            {selectedItem && (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center">
@@ -606,26 +639,13 @@ const SankeyDiagram = () => {
                   <div className="flex items-center space-x-3">
                     <div 
                       className="w-4 h-4 rounded-full"
-                      style={{ backgroundColor: selectedNode.color }}
+                      style={{ backgroundColor: '#10b981' }}
                     />
                     <div>
-                      <p className="font-semibold">{selectedNode.name}</p>
-                      <p className="text-sm text-gray-600 capitalize">{selectedNode.type.replace('_', ' ')}</p>
+                      <p className="font-semibold">{selectedItem}</p>
+                      <p className="text-sm text-gray-600">Click to switch views</p>
                     </div>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-sm text-gray-600">Total Value</p>
-                    <p className="text-lg font-bold text-emerald-600">
-                      {formatCurrency(selectedNode.value)}
-                    </p>
-                  </div>
-                  {selectedNode.accountData && (
-                    <div className="text-xs text-gray-500 space-y-1">
-                      <p><strong>Bank:</strong> {selectedNode.accountData.bank_name}</p>
-                      <p><strong>Type:</strong> {selectedNode.accountData.account_type.replace('_', ' ')}</p>
-                      <p><strong>Balance:</strong> {formatCurrency(selectedNode.accountData.balance)}</p>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             )}
