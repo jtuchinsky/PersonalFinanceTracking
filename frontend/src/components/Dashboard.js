@@ -131,6 +131,14 @@ const Dashboard = () => {
                   Manage Accounts
                 </Button>
               </Link>
+              {user?.is_admin && (
+                <Link to="/admin">
+                  <Button variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-50">
+                    <Shield className="w-4 h-4 mr-2" />
+                    Admin Panel
+                  </Button>
+                </Link>
+              )}
               <Button variant="outline" onClick={logout}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
