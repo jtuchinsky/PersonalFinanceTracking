@@ -12,16 +12,21 @@ const SankeyDiagram = () => {
   const [transactions, setTransactions] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [viewMode, setViewMode] = useState('category'); // 'category' or 'account'
-  const [selectedNode, setSelectedNode] = useState(null);
+  const [viewMode, setViewMode] = useState('category'); // 'category' or 'bank'
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [hoveredItem, setHoveredItem] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isAnimating, setIsAnimating] = useState(false);
   const svgRef = useRef();
   const { API } = useContext(AuthContext);
   const navigate = useNavigate();
 
-  const width = 800;
-  const height = 500;
-  const margin = { top: 20, right: 120, bottom: 20, left: 120 };
+  const width = 900;
+  const height = 600;
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const centerBoxSize = { width: 180, height: 120 };
+  const itemRadius = 220;
 
   useEffect(() => {
     fetchData();
