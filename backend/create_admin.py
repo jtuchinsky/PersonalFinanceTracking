@@ -30,9 +30,9 @@ def hash_password(password: str) -> str:
 def validate_email(email: str) -> bool:
     """Validate email format"""
     try:
-        EmailStr._validate(email)
-        return True
-    except ValidationError:
+        # Simple email validation
+        return "@" in email and "." in email.split("@")[1]
+    except:
         return False
 
 async def create_admin_account():
