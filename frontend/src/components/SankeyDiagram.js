@@ -71,163 +71,101 @@ const SankeyDiagram = () => {
     }
   };
 
-  const prepareDataForSankey = () => {
-    const nodes = [];
-    const links = [];
-    const nodeMap = new Map();
+  const prepareFlowData = () => {
+    const totalIncome = transactions
+      .filter(t => t.transaction_type === 'credit')
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    
+    const totalExpenses = transactions
+      .filter(t => t.transaction_type === 'debit')
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    
+    const netWorth = totalIncome - totalExpenses;
 
     if (viewMode === 'category') {
-      // Category view: Income Categories -> Accounts -> Expense Categories
+      // Group by categories
+      const incomeByCategory = {};
+      const expensesByCategory = {};
       
-      // Create nodes for income categories
-      const incomeTransactions = transactions.filter(t => t.transaction_type === 'credit');
-      const incomeCategories = [...new Set(incomeTransactions.map(t => t.category))];
-      
-      incomeCategories.forEach(category => {
-        const nodeId = `income_${category}`;
-        nodes.push({
-          id: nodeId,
-          name: category,
-          type: 'income_category',
-          color: getCategoryColor(category),
-          value: incomeTransactions
-            .filter(t => t.category === category)
-            .reduce((sum, t) => sum + Math.abs(t.amount), 0)
-        });
-        nodeMap.set(nodeId, nodes.length - 1);
-      });
-
-      // Create nodes for accounts
-      accounts.forEach(account => {
-        const nodeId = `account_${account.id}`;
-        nodes.push({
-          id: nodeId,
-          name: account.nickname || account.name,
-          type: 'account',
-          color: getAccountColor(account.account_type),
-          accountData: account,
-          value: Math.abs(account.balance)
-        });
-        nodeMap.set(nodeId, nodes.length - 1);
-      });
-
-      // Create nodes for expense categories
-      const expenseTransactions = transactions.filter(t => t.transaction_type === 'debit');
-      const expenseCategories = [...new Set(expenseTransactions.map(t => t.category))];
-      
-      expenseCategories.forEach(category => {
-        const nodeId = `expense_${category}`;
-        nodes.push({
-          id: nodeId,
-          name: category,
-          type: 'expense_category',
-          color: getCategoryColor(category),
-          value: expenseTransactions
-            .filter(t => t.category === category)
-            .reduce((sum, t) => sum + Math.abs(t.amount), 0)
-        });
-        nodeMap.set(nodeId, nodes.length - 1);
-      });
-
-      // Create links for income -> accounts
-      incomeTransactions.forEach(transaction => {
-        const sourceId = `income_${transaction.category}`;
-        const targetId = `account_${transaction.account_id}`;
-        
-        if (nodeMap.has(sourceId) && nodeMap.has(targetId)) {
-          links.push({
-            source: nodeMap.get(sourceId),
-            target: nodeMap.get(targetId),
-            value: Math.abs(transaction.amount),
-            category: transaction.category,
-            type: 'income_flow'
-          });
+      transactions.forEach(transaction => {
+        const amount = Math.abs(transaction.amount);
+        if (transaction.transaction_type === 'credit') {
+          incomeByCategory[transaction.category] = (incomeByCategory[transaction.category] || 0) + amount;
+        } else {
+          expensesByCategory[transaction.category] = (expensesByCategory[transaction.category] || 0) + amount;
         }
       });
 
-      // Create links for accounts -> expenses
-      expenseTransactions.forEach(transaction => {
-        const sourceId = `account_${transaction.account_id}`;
-        const targetId = `expense_${transaction.category}`;
-        
-        if (nodeMap.has(sourceId) && nodeMap.has(targetId)) {
-          links.push({
-            source: nodeMap.get(sourceId),
-            target: nodeMap.get(targetId),
-            value: Math.abs(transaction.amount),
-            category: transaction.category,
-            type: 'expense_flow'
-          });
-        }
-      });
+      const incomeItems = Object.entries(incomeByCategory).map(([category, amount]) => ({
+        id: `income_${category}`,
+        name: category,
+        amount,
+        type: 'income',
+        color: getCategoryColor(category),
+        isBank: false
+      }));
+
+      const expenseItems = Object.entries(expensesByCategory).map(([category, amount]) => ({
+        id: `expense_${category}`,
+        name: category,
+        amount,
+        type: 'expense',
+        color: getCategoryColor(category),
+        isBank: false
+      }));
+
+      return { incomeItems, expenseItems, totalIncome, totalExpenses, netWorth };
 
     } else {
-      // Account view: Source Accounts -> Target Accounts (transfers)
-      // For now, we'll show account -> category flows more clearly
+      // Group by banks
+      const incomeByBank = {};
+      const expensesByBank = {};
       
-      accounts.forEach(account => {
-        const nodeId = `source_${account.id}`;
-        nodes.push({
-          id: nodeId,
-          name: `${account.nickname || account.name} (Source)`,
-          type: 'source_account',
-          color: getAccountColor(account.account_type),
-          accountData: account,
-          value: transactions
-            .filter(t => t.account_id === account.id)
-            .reduce((sum, t) => sum + Math.abs(t.amount), 0)
-        });
-        nodeMap.set(nodeId, nodes.length - 1);
-      });
-
-      // Create category nodes
-      const allCategories = [...new Set(transactions.map(t => t.category))];
-      allCategories.forEach(category => {
-        const nodeId = `category_${category}`;
-        nodes.push({
-          id: nodeId,
-          name: category,
-          type: 'category',
-          color: getCategoryColor(category),
-          value: transactions
-            .filter(t => t.category === category)
-            .reduce((sum, t) => sum + Math.abs(t.amount), 0)
-        });
-        nodeMap.set(nodeId, nodes.length - 1);
-      });
-
-      // Create links from accounts to categories
       transactions.forEach(transaction => {
-        const sourceId = `source_${transaction.account_id}`;
-        const targetId = `category_${transaction.category}`;
+        const account = accounts.find(acc => acc.id === transaction.account_id);
+        const bankName = account ? account.bank_name : 'Unknown Bank';
+        const amount = Math.abs(transaction.amount);
         
-        if (nodeMap.has(sourceId) && nodeMap.has(targetId)) {
-          links.push({
-            source: nodeMap.get(sourceId),
-            target: nodeMap.get(targetId),
-            value: Math.abs(transaction.amount),
-            transactionType: transaction.transaction_type,
-            type: 'account_category_flow'
-          });
+        if (transaction.transaction_type === 'credit') {
+          incomeByBank[bankName] = (incomeByBank[bankName] || 0) + amount;
+        } else {
+          expensesByBank[bankName] = (expensesByBank[bankName] || 0) + amount;
         }
       });
+
+      const incomeItems = Object.entries(incomeByBank).map(([bank, amount]) => ({
+        id: `income_${bank}`,
+        name: bank,
+        amount,
+        type: 'income',
+        color: getBankColor(bank),
+        isBank: true
+      }));
+
+      const expenseItems = Object.entries(expensesByBank).map(([bank, amount]) => ({
+        id: `expense_${bank}`,
+        name: bank,
+        amount,
+        type: 'expense',
+        color: getBankColor(bank),
+        isBank: true
+      }));
+
+      return { incomeItems, expenseItems, totalIncome, totalExpenses, netWorth };
     }
+  };
 
-    // Aggregate links with same source and target
-    const linkMap = new Map();
-    links.forEach(link => {
-      const key = `${link.source}-${link.target}`;
-      if (linkMap.has(key)) {
-        linkMap.get(key).value += link.value;
-      } else {
-        linkMap.set(key, { ...link });
-      }
-    });
-
-    return {
-      nodes,
-      links: Array.from(linkMap.values())
+  const getBankColor = (bankName) => {
+    const bankColors = {
+      'TD Bank': '#00b04f',
+      'Chase': '#117aca',
+      'Wells Fargo': '#d52b1e',
+      'Bank of America': '#e31837',
+      'Citibank': '#056dae',
+      'Capital One': '#004977',
+      'US Bank': '#0f4d92'
     };
+    return bankColors[bankName] || '#6b7280';
   };
 
   const createSankeyDiagram = () => {
