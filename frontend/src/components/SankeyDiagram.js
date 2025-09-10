@@ -507,6 +507,14 @@ const SankeyDiagram = () => {
     }).format(amount);
   };
 
+  const handleViewToggle = (newMode) => {
+    console.log('Switching view mode from', viewMode, 'to', newMode);
+    setIsAnimating(true);
+    setViewMode(newMode);
+    setSelectedItem(null);
+    setHoveredItem(null);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
