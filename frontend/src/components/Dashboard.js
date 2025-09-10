@@ -17,7 +17,8 @@ import {
   List,
   BarChart3,
   Settings,
-  Activity
+  Activity,
+  Shield
 } from 'lucide-react';
 
 const Dashboard = () => {
