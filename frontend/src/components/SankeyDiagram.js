@@ -384,12 +384,6 @@ const SankeyDiagram = () => {
         .style("cursor", "pointer")
         .on("click", function() {
           setSelectedItem(selectedItem === item.id ? null : item.id);
-        })
-        .on("mouseover", function() {
-          setHoveredItem(item.id);
-        })
-        .on("mouseout", function() {
-          setHoveredItem(null);
         });
 
       // Item circle
