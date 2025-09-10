@@ -557,220 +557,36 @@ const SankeyDiagram = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Flow Diagram */}
-          <div className="lg:col-span-3">
-            <Card className="relative overflow-hidden">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span className="flex items-center space-x-2">
-                    <BarChart3 className="w-5 h-5 text-emerald-600" />
-                    <span>
-                      Money Flow {viewMode === 'category' ? 'by Category' : 'by Bank'}
-                    </span>
-                  </span>
-                  <div className="text-sm text-gray-600">
-                    {transactions.length} transactions analyzed
-                  </div>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="relative">
-                {isAnimating && (
-                  <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
-                  </div>
-                )}
-                <div className="w-full overflow-x-auto">
-                  <svg
-                    ref={svgRef}
-                    width={width}
-                    height={height}
-                    className="border border-gray-200 rounded-lg bg-gradient-to-br from-gray-50 to-white"
-                  />
-                </div>
-                <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                  <h4 className="font-semibold text-blue-900 mb-2">🎯 How It Works:</h4>
-                  <ul className="text-sm text-blue-800 space-y-1">
-                    <li>• <strong>Switch Views:</strong> Use the header toggle button to switch between Category and Bank perspectives</li>
-                    <li>• <strong>Select Items:</strong> Click on income or expense items to highlight them</li>
-                    <li>• <strong>Flow Lines:</strong> Thickness represents money amounts flowing to/from your net worth</li>
-                    <li>• <strong>Hover Effects:</strong> Hover over flow lines to see detailed amounts</li>
-                  </ul>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Info Panel */}
-          <div className="space-y-6">
-            {/* Current View Info */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center">
-                  {viewMode === 'category' ? <PieChart className="w-5 h-5 mr-2" /> : <Building2 className="w-5 h-5 mr-2" />}
-                  Current View
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="bg-gradient-to-r from-emerald-50 to-blue-50 rounded-lg p-3">
-                  <p className="font-semibold text-gray-900">
-                    {viewMode === 'category' ? '📊 By Category' : '🏦 By Bank'}
-                  </p>
-                  <p className="text-sm text-gray-600 mt-1">
-                    {viewMode === 'category' 
-                      ? 'Grouped by expense and income categories'
-                      : 'Grouped by financial institutions'
-                    }
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm text-gray-600">
-                    Use the toggle button in the header to switch views
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Selected Item Info */}
-            {selectedItem && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center">
-                    <Eye className="w-5 h-5 mr-2" />
-                    Selected Item
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center space-x-3">
-                    <div 
-                      className="w-4 h-4 rounded-full"
-                      style={{ backgroundColor: '#10b981' }}
-                    />
-                    <div>
-                      <p className="font-semibold">{selectedItem}</p>
-                      <p className="text-sm text-gray-600">Click to switch views</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+        <Card className="relative overflow-hidden">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center space-x-2">
+                <BarChart3 className="w-5 h-5 text-emerald-600" />
+                <span>
+                  Money Flow {viewMode === 'category' ? 'by Category' : 'by Bank'}
+                </span>
+              </span>
+              <div className="text-sm text-gray-600">
+                {transactions.length} transactions analyzed
+              </div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="relative">
+            {isAnimating && (
+              <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
+              </div>
             )}
-
-            {/* Interactive Guide */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">💡 Interactive Features</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-3">
-                  <div className="flex items-start space-x-3">
-                    <div className="w-6 h-6 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-emerald-600 text-xs font-bold">1</span>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm">Switch Views</p>
-                      <p className="text-xs text-gray-600">Use the header toggle button to switch between Category and Bank views</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start space-x-3">
-                    <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-blue-600 text-xs font-bold">2</span>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm">Select Items</p>
-                      <p className="text-xs text-gray-600">Click income/expense items to highlight and see details</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start space-x-3">
-                    <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-purple-600 text-xs font-bold">3</span>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm">Flow Visualization</p>
-                      <p className="text-xs text-gray-600">Line thickness represents money amounts flowing to/from center</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start space-x-3">
-                    <div className="w-6 h-6 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-amber-600 text-xs font-bold">4</span>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm">Hover for Details</p>
-                      <p className="text-xs text-gray-600">Hover over flow lines to see transaction amounts</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Quick Stats */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center">
-                  <TrendingUp className="w-5 h-5 mr-2 text-emerald-600" />
-                  Financial Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="bg-gradient-to-r from-emerald-50 to-emerald-100 rounded-lg p-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-emerald-700 font-medium">💰 Total Income</p>
-                      <p className="text-lg font-bold text-emerald-800">
-                        {formatCurrency(
-                          transactions
-                            .filter(t => t.transaction_type === 'credit')
-                            .reduce((sum, t) => sum + Math.abs(t.amount), 0)
-                        )}
-                      </p>
-                    </div>
-                    <TrendingUp className="w-6 h-6 text-emerald-600" />
-                  </div>
-                </div>
-                
-                <div className="bg-gradient-to-r from-red-50 to-red-100 rounded-lg p-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-red-700 font-medium">💸 Total Expenses</p>
-                      <p className="text-lg font-bold text-red-800">
-                        {formatCurrency(
-                          transactions
-                            .filter(t => t.transaction_type === 'debit')
-                            .reduce((sum, t) => sum + Math.abs(t.amount), 0)
-                        )}
-                      </p>
-                    </div>
-                    <TrendingDown className="w-6 h-6 text-red-600" />
-                  </div>
-                </div>
-                
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-100 rounded-lg p-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-blue-700 font-medium">📊 Net Flow</p>
-                      <p className="text-lg font-bold text-blue-800">
-                        {formatCurrency(
-                          transactions.reduce((sum, t) => 
-                            sum + (t.transaction_type === 'credit' ? t.amount : -Math.abs(t.amount)), 0
-                          )
-                        )}
-                      </p>
-                    </div>
-                    <BarChart3 className="w-6 h-6 text-blue-600" />
-                  </div>
-                </div>
-                
-                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                  <p className="text-xs text-gray-600 text-center">
-                    📈 Data from {transactions.length} recent transactions
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+            <div className="w-full overflow-x-auto">
+              <svg
+                ref={svgRef}
+                width={width}
+                height={height}
+                className="border border-gray-200 rounded-lg bg-gradient-to-br from-gray-50 to-white"
+              />
+            </div>
+          </CardContent>
+        </Card>
       </main>
     </div>
   );
