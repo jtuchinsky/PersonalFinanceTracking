@@ -198,18 +198,6 @@ const SankeyDiagram = () => {
         .attr("id", `flow-gradient-${item.id}`)
         .attr("gradientUnits", "userSpaceOnUse");
 
-      if (item.type === 'income') {
-        gradient.attr("x1", centerX - centerBoxSize.width/2)
-               .attr("y1", centerY)
-               .attr("x2", centerX + centerBoxSize.width/2)
-               .attr("y2", centerY);
-      } else {
-        gradient.attr("x1", centerX + centerBoxSize.width/2)
-               .attr("y1", centerY)
-               .attr("x2", centerX - centerBoxSize.width/2)
-               .attr("y2", centerY);
-      }
-
       gradient.append("stop")
         .attr("offset", "0%")
         .attr("stop-color", item.color)
@@ -221,99 +209,135 @@ const SankeyDiagram = () => {
         .attr("stop-opacity", 0.3);
     });
 
-    // Position items in circular layout
-    const positionItems = (items, side) => {
-      return items.map((item, i) => {
-        const totalItems = items.length;
-        const angle = (i / Math.max(1, totalItems - 1)) * Math.PI - Math.PI/2; // Spread across semicircle
-        const adjustedAngle = side === 'left' ? Math.PI - angle : angle;
-        
-        return {
-          ...item,
-          x: centerX + Math.cos(adjustedAngle) * itemRadius,
-          y: centerY + Math.sin(adjustedAngle) * itemRadius * 0.6, // Compress vertically
-          angle: adjustedAngle
-        };
-      });
-    };
+    // Position income items on the RIGHT side of balance box
+    const positionedIncome = data.incomeItems.map((item, i) => {
+      const totalItems = data.incomeItems.length;
+      const spacing = Math.min(80, 300 / Math.max(1, totalItems - 1)); // Dynamic spacing
+      const startY = centerY - (totalItems - 1) * spacing / 2;
+      
+      return {
+        ...item,
+        x: centerX + centerBoxSize.width/2 + 150, // RIGHT side
+        y: startY + i * spacing
+      };
+    });
 
-    const positionedIncome = positionItems(data.incomeItems, 'left');
-    const positionedExpenses = positionItems(data.expenseItems, 'right');
+    // Position expense items on the LEFT side of balance box
+    const positionedExpenses = data.expenseItems.map((item, i) => {
+      const totalItems = data.expenseItems.length;
+      const spacing = Math.min(80, 300 / Math.max(1, totalItems - 1)); // Dynamic spacing
+      const startY = centerY - (totalItems - 1) * spacing / 2;
+      
+      return {
+        ...item,
+        x: centerX - centerBoxSize.width/2 - 150, // LEFT side
+        y: startY + i * spacing
+      };
+    });
 
     // Create curved flow paths
     const createFlowPath = (item, isIncome) => {
       const startX = item.x;
       const startY = item.y;
-      const endX = centerX + (isIncome ? -centerBoxSize.width/2 : centerBoxSize.width/2);
+      const endX = centerX + (isIncome ? centerBoxSize.width/2 : -centerBoxSize.width/2);
       const endY = centerY;
       
-      const midX = (startX + endX) / 2;
-      const midY = Math.min(startY, endY) - 30; // Create curve above
+      // Create smooth curved path
+      const controlX = (startX + endX) / 2;
+      const controlY = startY;
       
-      return `M ${startX} ${startY} Q ${midX} ${midY} ${endX} ${endY}`;
+      return `M ${startX} ${startY} Q ${controlX} ${controlY} ${endX} ${endY}`;
     };
 
-    // Draw income flows
-    const incomeFlows = svg.append("g").attr("class", "income-flows");
-    
+    // Draw income flows (from RIGHT to center)
     positionedIncome.forEach(item => {
-      const maxStroke = 20;
-      const strokeWidth = Math.max(2, Math.min(maxStroke, (item.amount / data.totalIncome) * maxStroke));
+      const maxStroke = 15;
+      const strokeWidth = Math.max(3, Math.min(maxStroke, (item.amount / data.totalIncome) * maxStroke));
       
-      incomeFlows.append("path")
+      svg.append("path")
         .attr("d", createFlowPath(item, true))
-        .attr("stroke", `url(#flow-gradient-${item.id})`)
+        .attr("stroke", item.color)
         .attr("stroke-width", strokeWidth)
         .attr("fill", "none")
         .attr("opacity", hoveredItem === item.id ? 0.9 : 0.6)
         .style("cursor", "pointer")
-        .on("mouseover", function() {
+        .on("mouseover", function(event) {
           setHoveredItem(item.id);
           d3.select(this).attr("opacity", 0.9);
+          
+          // Show tooltip
+          const tooltip = d3.select("body").append("div")
+            .attr("class", "sankey-tooltip")
+            .style("position", "absolute")
+            .style("background", "rgba(0, 0, 0, 0.8)")
+            .style("color", "white")
+            .style("padding", "8px")
+            .style("border-radius", "4px")
+            .style("font-size", "12px")
+            .style("pointer-events", "none")
+            .style("z-index", 1000);
+
+          tooltip.html(`
+            <strong>${item.name}</strong><br>
+            Amount: ${formatCurrency(item.amount)}
+          `)
+          .style("left", (event.pageX + 10) + "px")
+          .style("top", (event.pageY - 10) + "px");
         })
         .on("mouseout", function() {
           setHoveredItem(null);
           d3.select(this).attr("opacity", 0.6);
+          d3.selectAll(".sankey-tooltip").remove();
         })
         .on("click", function() {
           setSelectedItem(selectedItem === item.id ? null : item.id);
-          if (viewMode === 'category') {
-            setViewMode('bank');
-          } else {
-            setViewMode('category');
-          }
+          setViewMode(viewMode === 'category' ? 'bank' : 'category');
         });
     });
 
-    // Draw expense flows
-    const expenseFlows = svg.append("g").attr("class", "expense-flows");
-    
+    // Draw expense flows (from center to LEFT)
     positionedExpenses.forEach(item => {
-      const maxStroke = 20;
-      const strokeWidth = Math.max(2, Math.min(maxStroke, (item.amount / data.totalExpenses) * maxStroke));
+      const maxStroke = 15;
+      const strokeWidth = Math.max(3, Math.min(maxStroke, (item.amount / data.totalExpenses) * maxStroke));
       
-      expenseFlows.append("path")
+      svg.append("path")
         .attr("d", createFlowPath(item, false))
-        .attr("stroke", `url(#flow-gradient-${item.id})`)
+        .attr("stroke", item.color)
         .attr("stroke-width", strokeWidth)
         .attr("fill", "none")
         .attr("opacity", hoveredItem === item.id ? 0.9 : 0.6)
         .style("cursor", "pointer")
-        .on("mouseover", function() {
+        .on("mouseover", function(event) {
           setHoveredItem(item.id);
           d3.select(this).attr("opacity", 0.9);
+          
+          // Show tooltip
+          const tooltip = d3.select("body").append("div")
+            .attr("class", "sankey-tooltip")
+            .style("position", "absolute")
+            .style("background", "rgba(0, 0, 0, 0.8)")
+            .style("color", "white")
+            .style("padding", "8px")
+            .style("border-radius", "4px")
+            .style("font-size", "12px")
+            .style("pointer-events", "none")
+            .style("z-index", 1000);
+
+          tooltip.html(`
+            <strong>${item.name}</strong><br>
+            Amount: ${formatCurrency(item.amount)}
+          `)
+          .style("left", (event.pageX + 10) + "px")
+          .style("top", (event.pageY - 10) + "px");
         })
         .on("mouseout", function() {
           setHoveredItem(null);
           d3.select(this).attr("opacity", 0.6);
+          d3.selectAll(".sankey-tooltip").remove();
         })
         .on("click", function() {
           setSelectedItem(selectedItem === item.id ? null : item.id);
-          if (viewMode === 'category') {
-            setViewMode('bank');
-          } else {
-            setViewMode('category');
-          }
+          setViewMode(viewMode === 'category' ? 'bank' : 'category');
         });
     });
 
@@ -362,11 +386,9 @@ const SankeyDiagram = () => {
       .attr("fill", "#9ca3af")
       .text("Click to switch view");
 
-    // Draw income items
-    const incomeGroup = svg.append("g").attr("class", "income-items");
-    
+    // Draw income items on RIGHT side
     positionedIncome.forEach(item => {
-      const itemGroup = incomeGroup.append("g")
+      const itemGroup = svg.append("g")
         .attr("class", "income-item")
         .style("cursor", "pointer")
         .on("click", function() {
@@ -384,37 +406,36 @@ const SankeyDiagram = () => {
       itemGroup.append("circle")
         .attr("cx", item.x)
         .attr("cy", item.y)
-        .attr("r", Math.max(8, Math.min(25, Math.sqrt(item.amount) / 5)))
+        .attr("r", Math.max(12, Math.min(25, Math.sqrt(item.amount) / 8)))
         .attr("fill", item.color)
         .attr("stroke", selectedItem === item.id ? "#000" : "#fff")
         .attr("stroke-width", selectedItem === item.id ? 3 : 2)
-        .attr("opacity", hoveredItem === item.id ? 0.9 : 0.7);
+        .attr("opacity", hoveredItem === item.id ? 1.0 : 0.8);
 
-      // Item label
+      // Item label (to the right of circle)
       itemGroup.append("text")
-        .attr("x", item.x)
-        .attr("y", item.y - 35)
-        .attr("text-anchor", "middle")
-        .attr("font-size", "12px")
+        .attr("x", item.x + 35)
+        .attr("y", item.y - 5)
+        .attr("text-anchor", "start")
+        .attr("font-size", "14px")
         .attr("font-weight", "600")
         .attr("fill", "#374151")
         .text(item.name);
 
-      // Item amount
+      // Item amount (below label)
       itemGroup.append("text")
-        .attr("x", item.x)
-        .attr("y", item.y - 20)
-        .attr("text-anchor", "middle")
-        .attr("font-size", "10px")
+        .attr("x", item.x + 35)
+        .attr("y", item.y + 10)
+        .attr("text-anchor", "start")
+        .attr("font-size", "12px")
         .attr("fill", "#16a34a")
+        .attr("font-weight", "500")
         .text(`+${formatCurrency(item.amount)}`);
     });
 
-    // Draw expense items
-    const expenseGroup = svg.append("g").attr("class", "expense-items");
-    
+    // Draw expense items on LEFT side
     positionedExpenses.forEach(item => {
-      const itemGroup = expenseGroup.append("g")
+      const itemGroup = svg.append("g")
         .attr("class", "expense-item")
         .style("cursor", "pointer")
         .on("click", function() {
@@ -432,49 +453,51 @@ const SankeyDiagram = () => {
       itemGroup.append("circle")
         .attr("cx", item.x)
         .attr("cy", item.y)
-        .attr("r", Math.max(8, Math.min(25, Math.sqrt(item.amount) / 5)))
+        .attr("r", Math.max(12, Math.min(25, Math.sqrt(item.amount) / 8)))
         .attr("fill", item.color)
         .attr("stroke", selectedItem === item.id ? "#000" : "#fff")
         .attr("stroke-width", selectedItem === item.id ? 3 : 2)
-        .attr("opacity", hoveredItem === item.id ? 0.9 : 0.7);
+        .attr("opacity", hoveredItem === item.id ? 1.0 : 0.8);
 
-      // Item label
+      // Item label (to the left of circle)
       itemGroup.append("text")
-        .attr("x", item.x)
-        .attr("y", item.y - 35)
-        .attr("text-anchor", "middle")
-        .attr("font-size", "12px")
+        .attr("x", item.x - 35)
+        .attr("y", item.y - 5)
+        .attr("text-anchor", "end")
+        .attr("font-size", "14px")
         .attr("font-weight", "600")
         .attr("fill", "#374151")
         .text(item.name);
 
-      // Item amount
+      // Item amount (below label)
       itemGroup.append("text")
-        .attr("x", item.x)
-        .attr("y", item.y - 20)
-        .attr("text-anchor", "middle")
-        .attr("font-size", "10px")
+        .attr("x", item.x - 35)
+        .attr("y", item.y + 10)
+        .attr("text-anchor", "end")
+        .attr("font-size", "12px")
         .attr("fill", "#dc2626")
+        .attr("font-weight", "500")
         .text(`-${formatCurrency(item.amount)}`);
     });
 
-    // Add income/expense section labels
+    // Add section headers
     svg.append("text")
-      .attr("x", 80)
+      .attr("x", centerX - centerBoxSize.width/2 - 150)
       .attr("y", 40)
-      .attr("font-size", "16px")
-      .attr("font-weight", "700")
-      .attr("fill", "#16a34a")
-      .text("💰 Income");
-
-    svg.append("text")
-      .attr("x", width - 80)
-      .attr("y", 40)
-      .attr("text-anchor", "end")
-      .attr("font-size", "16px")
+      .attr("text-anchor", "middle")
+      .attr("font-size", "18px")
       .attr("font-weight", "700")
       .attr("fill", "#dc2626")
       .text("💸 Expenses");
+
+    svg.append("text")
+      .attr("x", centerX + centerBoxSize.width/2 + 150)
+      .attr("y", 40)
+      .attr("text-anchor", "middle")
+      .attr("font-size", "18px")
+      .attr("font-weight", "700")
+      .attr("fill", "#16a34a")
+      .text("💰 Income");
   };
 
   const formatCurrency = (amount) => {
