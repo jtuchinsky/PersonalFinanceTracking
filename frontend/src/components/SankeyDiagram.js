@@ -549,10 +549,7 @@ const SankeyDiagram = () => {
                 <Button
                   variant={viewMode === 'category' ? 'default' : 'ghost'}
                   size="sm"
-                  onClick={() => {
-                    setViewMode('category');
-                    setSelectedItem(null);
-                  }}
+                  onClick={() => handleViewToggle('category')}
                   className={`${viewMode === 'category' ? 'bg-emerald-600 text-white' : ''} transition-all duration-200`}
                 >
                   <PieChart className="w-4 h-4 mr-2" />
@@ -561,10 +558,7 @@ const SankeyDiagram = () => {
                 <Button
                   variant={viewMode === 'bank' ? 'default' : 'ghost'}
                   size="sm"
-                  onClick={() => {
-                    setViewMode('bank');
-                    setSelectedItem(null);
-                  }}
+                  onClick={() => handleViewToggle('bank')}
                   className={`${viewMode === 'bank' ? 'bg-emerald-600 text-white' : ''} transition-all duration-200`}
                 >
                   <Building2 className="w-4 h-4 mr-2" />
