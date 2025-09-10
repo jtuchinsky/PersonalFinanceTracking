@@ -168,12 +168,12 @@ const SankeyDiagram = () => {
     return bankColors[bankName] || '#6b7280';
   };
 
-  const createSankeyDiagram = () => {
+  const createFlowDiagram = () => {
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove(); // Clear previous diagram
 
-    const data = prepareDataForSankey();
-    if (data.nodes.length === 0 || data.links.length === 0) {
+    const data = prepareFlowData();
+    if (!data.incomeItems.length && !data.expenseItems.length) {
       // Show empty state
       svg.append("text")
         .attr("x", width / 2)
@@ -184,145 +184,292 @@ const SankeyDiagram = () => {
       return;
     }
 
-    const sankeyGenerator = sankey()
-      .nodeWidth(15)
-      .nodePadding(10)
-      .extent([[margin.left, margin.top], [width - margin.right, height - margin.bottom]]);
-
-    const sankeyData = sankeyGenerator({
-      nodes: data.nodes.map(d => ({ ...d })),
-      links: data.links.map(d => ({ ...d }))
-    });
-
-    // Create gradient definitions for links
+    // Create gradient definitions
     const defs = svg.append("defs");
     
-    sankeyData.links.forEach((link, i) => {
+    // Create gradients for flows
+    [...data.incomeItems, ...data.expenseItems].forEach((item, i) => {
       const gradient = defs.append("linearGradient")
-        .attr("id", `gradient-${i}`)
-        .attr("gradientUnits", "userSpaceOnUse")
-        .attr("x1", link.source.x1)
-        .attr("y1", (link.source.y0 + link.source.y1) / 2)
-        .attr("x2", link.target.x0)
-        .attr("y2", (link.target.y0 + link.target.y1) / 2);
+        .attr("id", `flow-gradient-${item.id}`)
+        .attr("gradientUnits", "userSpaceOnUse");
+
+      if (item.type === 'income') {
+        gradient.attr("x1", centerX - centerBoxSize.width/2)
+               .attr("y1", centerY)
+               .attr("x2", centerX + centerBoxSize.width/2)
+               .attr("y2", centerY);
+      } else {
+        gradient.attr("x1", centerX + centerBoxSize.width/2)
+               .attr("y1", centerY)
+               .attr("x2", centerX - centerBoxSize.width/2)
+               .attr("y2", centerY);
+      }
 
       gradient.append("stop")
         .attr("offset", "0%")
-        .attr("stop-color", link.source.color);
+        .attr("stop-color", item.color)
+        .attr("stop-opacity", 0.8);
 
       gradient.append("stop")
         .attr("offset", "100%")
-        .attr("stop-color", link.target.color);
+        .attr("stop-color", item.color)
+        .attr("stop-opacity", 0.3);
     });
 
-    // Draw links
-    const links = svg.append("g")
-      .selectAll("path")
-      .data(sankeyData.links)
-      .enter()
-      .append("path")
-      .attr("d", sankeyLinkHorizontal())
-      .attr("stroke", (d, i) => `url(#gradient-${i})`)
-      .attr("stroke-width", d => Math.max(1, d.width))
-      .attr("fill", "none")
-      .attr("opacity", 0.6)
-      .on("mouseover", function(event, d) {
-        d3.select(this).attr("opacity", 0.8);
+    // Position items in circular layout
+    const positionItems = (items, side) => {
+      return items.map((item, i) => {
+        const totalItems = items.length;
+        const angle = (i / Math.max(1, totalItems - 1)) * Math.PI - Math.PI/2; // Spread across semicircle
+        const adjustedAngle = side === 'left' ? Math.PI - angle : angle;
         
-        // Show tooltip
-        const tooltip = d3.select("body").append("div")
-          .attr("class", "sankey-tooltip")
-          .style("position", "absolute")
-          .style("background", "rgba(0, 0, 0, 0.8)")
-          .style("color", "white")
-          .style("padding", "8px")
-          .style("border-radius", "4px")
-          .style("font-size", "12px")
-          .style("pointer-events", "none")
-          .style("z-index", 1000);
-
-        tooltip.html(`
-          <strong>${d.source.name}</strong> → <strong>${d.target.name}</strong><br>
-          Amount: $${d.value.toFixed(2)}
-        `)
-        .style("left", (event.pageX + 10) + "px")
-        .style("top", (event.pageY - 10) + "px");
-      })
-      .on("mouseout", function(event, d) {
-        d3.select(this).attr("opacity", 0.6);
-        d3.selectAll(".sankey-tooltip").remove();
+        return {
+          ...item,
+          x: centerX + Math.cos(adjustedAngle) * itemRadius,
+          y: centerY + Math.sin(adjustedAngle) * itemRadius * 0.6, // Compress vertically
+          angle: adjustedAngle
+        };
       });
+    };
 
-    // Draw nodes
-    const nodes = svg.append("g")
-      .selectAll("rect")
-      .data(sankeyData.nodes)
-      .enter()
-      .append("rect")
-      .attr("x", d => d.x0)
-      .attr("y", d => d.y0)
-      .attr("height", d => d.y1 - d.y0)
-      .attr("width", d => d.x1 - d.x0)
-      .attr("fill", d => d.color)
-      .attr("stroke", d => selectedNode?.id === d.id ? "#000" : "none")
+    const positionedIncome = positionItems(data.incomeItems, 'left');
+    const positionedExpenses = positionItems(data.expenseItems, 'right');
+
+    // Create curved flow paths
+    const createFlowPath = (item, isIncome) => {
+      const startX = item.x;
+      const startY = item.y;
+      const endX = centerX + (isIncome ? -centerBoxSize.width/2 : centerBoxSize.width/2);
+      const endY = centerY;
+      
+      const midX = (startX + endX) / 2;
+      const midY = Math.min(startY, endY) - 30; // Create curve above
+      
+      return `M ${startX} ${startY} Q ${midX} ${midY} ${endX} ${endY}`;
+    };
+
+    // Draw income flows
+    const incomeFlows = svg.append("g").attr("class", "income-flows");
+    
+    positionedIncome.forEach(item => {
+      const maxStroke = 20;
+      const strokeWidth = Math.max(2, Math.min(maxStroke, (item.amount / data.totalIncome) * maxStroke));
+      
+      incomeFlows.append("path")
+        .attr("d", createFlowPath(item, true))
+        .attr("stroke", `url(#flow-gradient-${item.id})`)
+        .attr("stroke-width", strokeWidth)
+        .attr("fill", "none")
+        .attr("opacity", hoveredItem === item.id ? 0.9 : 0.6)
+        .style("cursor", "pointer")
+        .on("mouseover", function() {
+          setHoveredItem(item.id);
+          d3.select(this).attr("opacity", 0.9);
+        })
+        .on("mouseout", function() {
+          setHoveredItem(null);
+          d3.select(this).attr("opacity", 0.6);
+        })
+        .on("click", function() {
+          setSelectedItem(selectedItem === item.id ? null : item.id);
+          if (viewMode === 'category') {
+            setViewMode('bank');
+          } else {
+            setViewMode('category');
+          }
+        });
+    });
+
+    // Draw expense flows
+    const expenseFlows = svg.append("g").attr("class", "expense-flows");
+    
+    positionedExpenses.forEach(item => {
+      const maxStroke = 20;
+      const strokeWidth = Math.max(2, Math.min(maxStroke, (item.amount / data.totalExpenses) * maxStroke));
+      
+      expenseFlows.append("path")
+        .attr("d", createFlowPath(item, false))
+        .attr("stroke", `url(#flow-gradient-${item.id})`)
+        .attr("stroke-width", strokeWidth)
+        .attr("fill", "none")
+        .attr("opacity", hoveredItem === item.id ? 0.9 : 0.6)
+        .style("cursor", "pointer")
+        .on("mouseover", function() {
+          setHoveredItem(item.id);
+          d3.select(this).attr("opacity", 0.9);
+        })
+        .on("mouseout", function() {
+          setHoveredItem(null);
+          d3.select(this).attr("opacity", 0.6);
+        })
+        .on("click", function() {
+          setSelectedItem(selectedItem === item.id ? null : item.id);
+          if (viewMode === 'category') {
+            setViewMode('bank');
+          } else {
+            setViewMode('category');
+          }
+        });
+    });
+
+    // Draw central balance box
+    const balanceGroup = svg.append("g").attr("class", "balance-box");
+    
+    balanceGroup.append("rect")
+      .attr("x", centerX - centerBoxSize.width/2)
+      .attr("y", centerY - centerBoxSize.height/2)
+      .attr("width", centerBoxSize.width)
+      .attr("height", centerBoxSize.height)
+      .attr("rx", 12)
+      .attr("fill", data.netWorth >= 0 ? "#dcfce7" : "#fef2f2")
+      .attr("stroke", data.netWorth >= 0 ? "#16a34a" : "#dc2626")
       .attr("stroke-width", 2)
-      .attr("rx", 3)
+      .style("filter", "drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1))")
       .style("cursor", "pointer")
-      .on("click", function(event, d) {
-        setSelectedNode(selectedNode?.id === d.id ? null : d);
-        
-        // If clicking on an account node, could switch to account view
-        if (d.type === 'account' || d.type === 'source_account') {
-          // Optional: auto-switch view mode
-          // setViewMode('account');
-        }
-      })
-      .on("mouseover", function(event, d) {
-        d3.select(this).attr("stroke", "#000").attr("stroke-width", 1);
-        
-        // Highlight connected links
-        links.attr("opacity", link => 
-          (link.source === d || link.target === d) ? 0.8 : 0.3
-        );
-      })
-      .on("mouseout", function(event, d) {
-        d3.select(this).attr("stroke", selectedNode?.id === d.id ? "#000" : "none");
-        
-        // Reset link opacity
-        links.attr("opacity", 0.6);
+      .on("click", function() {
+        setViewMode(viewMode === 'category' ? 'bank' : 'category');
       });
 
-    // Add node labels
-    svg.append("g")
-      .selectAll("text")
-      .data(sankeyData.nodes)
-      .enter()
-      .append("text")
-      .attr("x", d => d.x0 < width / 2 ? d.x1 + 6 : d.x0 - 6)
-      .attr("y", d => (d.y1 + d.y0) / 2)
-      .attr("dy", "0.35em")
-      .attr("text-anchor", d => d.x0 < width / 2 ? "start" : "end")
-      .attr("font-size", "12px")
-      .attr("font-weight", d => selectedNode?.id === d.id ? "bold" : "normal")
-      .text(d => d.name)
-      .style("cursor", "pointer")
-      .on("click", function(event, d) {
-        setSelectedNode(selectedNode?.id === d.id ? null : d);
-      });
-
-    // Add value labels below node names
-    svg.append("g")
-      .selectAll("text")
-      .data(sankeyData.nodes)
-      .enter()
-      .append("text")
-      .attr("x", d => d.x0 < width / 2 ? d.x1 + 6 : d.x0 - 6)
-      .attr("y", d => (d.y1 + d.y0) / 2 + 15)
-      .attr("dy", "0.35em")
-      .attr("text-anchor", d => d.x0 < width / 2 ? "start" : "end")
-      .attr("font-size", "10px")
+    // Balance box content
+    balanceGroup.append("text")
+      .attr("x", centerX)
+      .attr("y", centerY - 20)
+      .attr("text-anchor", "middle")
+      .attr("font-size", "14px")
+      .attr("font-weight", "600")
       .attr("fill", "#6b7280")
-      .text(d => `$${d.value.toFixed(2)}`);
+      .text("Net Worth");
+
+    balanceGroup.append("text")
+      .attr("x", centerX)
+      .attr("y", centerY + 5)
+      .attr("text-anchor", "middle")
+      .attr("font-size", "18px")
+      .attr("font-weight", "700")
+      .attr("fill", data.netWorth >= 0 ? "#16a34a" : "#dc2626")
+      .text(formatCurrency(data.netWorth));
+
+    balanceGroup.append("text")
+      .attr("x", centerX)
+      .attr("y", centerY + 25)
+      .attr("text-anchor", "middle")
+      .attr("font-size", "10px")
+      .attr("fill", "#9ca3af")
+      .text("Click to switch view");
+
+    // Draw income items
+    const incomeGroup = svg.append("g").attr("class", "income-items");
+    
+    positionedIncome.forEach(item => {
+      const itemGroup = incomeGroup.append("g")
+        .attr("class", "income-item")
+        .style("cursor", "pointer")
+        .on("click", function() {
+          setSelectedItem(selectedItem === item.id ? null : item.id);
+          setViewMode(viewMode === 'category' ? 'bank' : 'category');
+        })
+        .on("mouseover", function() {
+          setHoveredItem(item.id);
+        })
+        .on("mouseout", function() {
+          setHoveredItem(null);
+        });
+
+      // Item circle
+      itemGroup.append("circle")
+        .attr("cx", item.x)
+        .attr("cy", item.y)
+        .attr("r", Math.max(8, Math.min(25, Math.sqrt(item.amount) / 5)))
+        .attr("fill", item.color)
+        .attr("stroke", selectedItem === item.id ? "#000" : "#fff")
+        .attr("stroke-width", selectedItem === item.id ? 3 : 2)
+        .attr("opacity", hoveredItem === item.id ? 0.9 : 0.7);
+
+      // Item label
+      itemGroup.append("text")
+        .attr("x", item.x)
+        .attr("y", item.y - 35)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "12px")
+        .attr("font-weight", "600")
+        .attr("fill", "#374151")
+        .text(item.name);
+
+      // Item amount
+      itemGroup.append("text")
+        .attr("x", item.x)
+        .attr("y", item.y - 20)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "10px")
+        .attr("fill", "#16a34a")
+        .text(`+${formatCurrency(item.amount)}`);
+    });
+
+    // Draw expense items
+    const expenseGroup = svg.append("g").attr("class", "expense-items");
+    
+    positionedExpenses.forEach(item => {
+      const itemGroup = expenseGroup.append("g")
+        .attr("class", "expense-item")
+        .style("cursor", "pointer")
+        .on("click", function() {
+          setSelectedItem(selectedItem === item.id ? null : item.id);
+          setViewMode(viewMode === 'category' ? 'bank' : 'category');
+        })
+        .on("mouseover", function() {
+          setHoveredItem(item.id);
+        })
+        .on("mouseout", function() {
+          setHoveredItem(null);
+        });
+
+      // Item circle
+      itemGroup.append("circle")
+        .attr("cx", item.x)
+        .attr("cy", item.y)
+        .attr("r", Math.max(8, Math.min(25, Math.sqrt(item.amount) / 5)))
+        .attr("fill", item.color)
+        .attr("stroke", selectedItem === item.id ? "#000" : "#fff")
+        .attr("stroke-width", selectedItem === item.id ? 3 : 2)
+        .attr("opacity", hoveredItem === item.id ? 0.9 : 0.7);
+
+      // Item label
+      itemGroup.append("text")
+        .attr("x", item.x)
+        .attr("y", item.y - 35)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "12px")
+        .attr("font-weight", "600")
+        .attr("fill", "#374151")
+        .text(item.name);
+
+      // Item amount
+      itemGroup.append("text")
+        .attr("x", item.x)
+        .attr("y", item.y - 20)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "10px")
+        .attr("fill", "#dc2626")
+        .text(`-${formatCurrency(item.amount)}`);
+    });
+
+    // Add income/expense section labels
+    svg.append("text")
+      .attr("x", 80)
+      .attr("y", 40)
+      .attr("font-size", "16px")
+      .attr("font-weight", "700")
+      .attr("fill", "#16a34a")
+      .text("💰 Income");
+
+    svg.append("text")
+      .attr("x", width - 80)
+      .attr("y", 40)
+      .attr("text-anchor", "end")
+      .attr("font-size", "16px")
+      .attr("font-weight", "700")
+      .attr("fill", "#dc2626")
+      .text("💸 Expenses");
   };
 
   const formatCurrency = (amount) => {
