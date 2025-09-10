@@ -379,7 +379,7 @@ const SankeyDiagram = () => {
       .attr("text-anchor", "middle")
       .attr("font-size", "10px")
       .attr("fill", "#9ca3af")
-      .text("Click to switch view");
+      .text("Your financial center");
 
     // Draw income items on RIGHT side
     positionedIncome.forEach(item => {
