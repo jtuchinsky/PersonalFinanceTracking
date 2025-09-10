@@ -34,9 +34,14 @@ const SankeyDiagram = () => {
 
   useEffect(() => {
     if (transactions.length > 0 && accounts.length > 0 && categories.length > 0) {
-      createSankeyDiagram();
+      setIsAnimating(true);
+      const timer = setTimeout(() => {
+        createFlowDiagram();
+        setIsAnimating(false);
+      }, 200);
+      return () => clearTimeout(timer);
     }
-  }, [transactions, accounts, categories, viewMode, selectedNode]);
+  }, [transactions, accounts, categories, viewMode, selectedItem, hoveredItem]);
 
   const fetchData = async () => {
     try {
