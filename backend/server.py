@@ -123,6 +123,35 @@ class DashboardData(BaseModel):
     recent_transactions: List[Transaction]
     category_spending: dict
 
+class UserActivity(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    action: str
+    details: str
+    ip_address: Optional[str] = None
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class AdminStats(BaseModel):
+    total_users: int
+    active_users: int
+    locked_users: int
+    deleted_users: int
+    total_accounts: int
+    total_transactions: int
+    recent_activities: List[UserActivity]
+
+class UserManagement(BaseModel):
+    id: str
+    email: str
+    name: str
+    account_status: str
+    is_admin: bool
+    total_accounts: int
+    total_transactions: int
+    total_balance: float
+    last_login: Optional[datetime]
+    created_at: datetime
+
 # Helper functions
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
