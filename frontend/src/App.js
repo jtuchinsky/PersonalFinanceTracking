@@ -14,6 +14,7 @@ import AddAccount from './components/AddAccount';
 import AccountManager from './components/AccountManager';
 import EditAccount from './components/EditAccount';
 import SankeyDiagram from './components/SankeyDiagram';
+import AdminDashboard from './components/AdminDashboard';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
