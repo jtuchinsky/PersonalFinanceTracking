@@ -489,7 +489,6 @@ const SankeyDiagram = () => {
     setIsAnimating(true);
     setViewMode(newMode);
     setSelectedItem(null);
-    setHoveredItem(null);
   };
 
   if (loading) {
