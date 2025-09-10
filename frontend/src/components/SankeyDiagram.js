@@ -394,7 +394,13 @@ const SankeyDiagram = () => {
         .attr("fill", item.color)
         .attr("stroke", selectedItem === item.id ? "#000" : "#fff")
         .attr("stroke-width", selectedItem === item.id ? 3 : 2)
-        .attr("opacity", 0.8);
+        .attr("opacity", 0.8)
+        .on("mouseover", function() {
+          d3.select(this).attr("opacity", 1.0).attr("stroke-width", 3);
+        })
+        .on("mouseout", function() {
+          d3.select(this).attr("opacity", 0.8).attr("stroke-width", selectedItem === item.id ? 3 : 2);
+        });
 
       // Item label (to the right of circle)
       itemGroup.append("text")
