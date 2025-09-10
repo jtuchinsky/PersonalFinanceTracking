@@ -428,10 +428,29 @@ async def register(user_data: UserCreate):
 async def login(login_data: UserLogin):
     user = await db.users.find_one({"email": login_data.email})
     if not user or not verify_password(login_data.password, user["password"]):
+        await log_user_activity("unknown", "failed_login", f"Failed login attempt for {login_data.email}")
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # Check account status
+    if user.get("account_status", "active") == "locked":
+        await log_user_activity(user["id"], "login_blocked", "Login attempt on locked account")
+        raise HTTPException(status_code=403, detail="Account is locked. Please contact administrator.")
+    
+    if user.get("account_status", "active") == "deleted":
+        await log_user_activity(user["id"], "login_blocked", "Login attempt on deleted account")
+        raise HTTPException(status_code=403, detail="Account not found.")
+    
+    # Update last login
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"last_login": datetime.now(timezone.utc)}}
+    )
     
     token = create_access_token(user["id"], user["email"])
     user_obj = User(**{k: v for k, v in user.items() if k != "password"})
+    
+    # Log successful login
+    await log_user_activity(user["id"], "login", "User logged in successfully")
     
     return {"access_token": token, "token_type": "bearer", "user": user_obj}
 
