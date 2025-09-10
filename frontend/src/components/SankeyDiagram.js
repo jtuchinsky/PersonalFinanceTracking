@@ -337,7 +337,7 @@ const SankeyDiagram = () => {
         })
         .on("click", function() {
           setSelectedItem(selectedItem === item.id ? null : item.id);
-          setViewMode(viewMode === 'category' ? 'bank' : 'category');
+          handleViewToggle(viewMode === 'category' ? 'bank' : 'category');
         });
     });
 
