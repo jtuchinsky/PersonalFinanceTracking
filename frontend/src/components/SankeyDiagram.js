@@ -650,60 +650,53 @@ const SankeyDiagram = () => {
               </Card>
             )}
 
-            {/* Legend */}
+            {/* Interactive Guide */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Legend</CardTitle>
+                <CardTitle className="text-lg">💡 Interactive Features</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                {viewMode === 'category' ? (
-                  <>
-                    <div className="space-y-2">
-                      <h4 className="font-semibold text-sm text-gray-700">Income Categories</h4>
-                      {categories.filter(cat => 
-                        transactions.some(t => t.category === cat.name && t.transaction_type === 'credit')
-                      ).map(category => (
-                        <div key={category.id} className="flex items-center space-x-2 text-sm">
-                          <div 
-                            className="w-3 h-3 rounded-full"
-                            style={{ backgroundColor: category.color }}
-                          />
-                          <span>{category.name}</span>
-                        </div>
-                      ))}
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  <div className="flex items-start space-x-3">
+                    <div className="w-6 h-6 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-emerald-600 text-xs font-bold">1</span>
                     </div>
-                    <div className="space-y-2">
-                      <h4 className="font-semibold text-sm text-gray-700">Expense Categories</h4>
-                      {categories.filter(cat => 
-                        transactions.some(t => t.category === cat.name && t.transaction_type === 'debit')
-                      ).map(category => (
-                        <div key={category.id} className="flex items-center space-x-2 text-sm">
-                          <div 
-                            className="w-3 h-3 rounded-full"
-                            style={{ backgroundColor: category.color }}
-                          />
-                          <span>{category.name}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <div className="space-y-2">
-                    <h4 className="font-semibold text-sm text-gray-700">Account Types</h4>
-                    <div className="flex items-center space-x-2 text-sm">
-                      <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                      <span>Checking</span>
-                    </div>
-                    <div className="flex items-center space-x-2 text-sm">
-                      <div className="w-3 h-3 rounded-full bg-blue-500" />
-                      <span>Savings</span>
-                    </div>
-                    <div className="flex items-center space-x-2 text-sm">
-                      <div className="w-3 h-3 rounded-full bg-amber-500" />
-                      <span>Credit Card</span>
+                    <div>
+                      <p className="font-semibold text-sm">Toggle Views</p>
+                      <p className="text-xs text-gray-600">Use header buttons to switch between Category and Bank views</p>
                     </div>
                   </div>
-                )}
+                  
+                  <div className="flex items-start space-x-3">
+                    <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-blue-600 text-xs font-bold">2</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm">Click Items</p>
+                      <p className="text-xs text-gray-600">Click any income/expense item to auto-switch views</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start space-x-3">
+                    <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-purple-600 text-xs font-bold">3</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm">Flow Lines</p>
+                      <p className="text-xs text-gray-600">Line thickness shows money amounts</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start space-x-3">
+                    <div className="w-6 h-6 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-amber-600 text-xs font-bold">4</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm">Central Hub</p>
+                      <p className="text-xs text-gray-600">Click net worth box to switch views</p>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
