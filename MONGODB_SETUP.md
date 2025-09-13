@@ -76,7 +76,7 @@ MONGO_URL=mongodb://localhost:27017
 MONGO_URL=mongodb://username:password@localhost:27017
 
 # MongoDB Atlas
-MONGO_URL=mongodb+srv://username:password@cluster0.mongodb.net/finance_tracker?retryWrites=true&w=majority
+MONGO_URL=mongodb+srv://username:password@cluster0.mongodb.net/personal_finance_tracker?retryWrites=true&w=majority
 
 # Docker MongoDB
 MONGO_URL=mongodb://admin:password@localhost:27017
@@ -86,7 +86,7 @@ MONGO_URL=mongodb://admin:password@localhost:27017
 
 ### Database Structure
 ```
-Database: finance_tracker
+Database: personal_finance_tracker
 ├── users                    # User accounts and authentication
 ├── accounts                 # Financial accounts (bank, credit cards)
 ├── transactions            # Financial transactions
@@ -105,7 +105,7 @@ import os
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ.get('DB_NAME', 'finance_tracker')]
+db = client[os.environ.get('DB_NAME', 'personal_finance_tracker')]
 ```
 
 ## 📊 Application Schema
