@@ -1,0 +1,8 @@
+db.transactions.createIndex({ tenantId: 1, accountId: 1, dedupeHash: 1 }, { unique: true, name: "uniq_tenant_account_dedupe" })
+db.transactions.createIndex({ tenantId: 1, accountId: 1, postedAt: 1 })
+db.transactions.createIndex({ tenantId: 1, categoryId: 1, postedAt: 1 })
+db.subscriptions.createIndex({ tenantId: 1, merchantNormalized: 1 }, { unique: true })
+db.rollups_category_month.createIndex({ tenantId: 1, month: 1, categoryId: 1 }, { unique: true })
+db.rules.createIndex({ tenantId: 1, priority: 1 })
+db.accounts.createIndex({ tenantId: 1 })
+db.budgets.createIndex({ tenantId: 1, month: 1 }, { unique: true })

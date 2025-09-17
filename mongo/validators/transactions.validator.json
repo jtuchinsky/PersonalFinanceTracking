@@ -1,0 +1,19 @@
+{
+  "$jsonSchema": {
+    "bsonType": "object",
+    "required": ["tenantId","accountId","postedAt","amount","currency","dedupeHash"],
+    "properties": {
+      "tenantId": { "bsonType": "string" },
+      "accountId": { "bsonType": "string" },
+      "postedAt": { "bsonType": "string" },
+      "amount": { "bsonType": ["double", "decimal"] },
+      "currency": { "bsonType": "string" },
+      "merchant": { "bsonType": ["string","null"] },
+      "descriptionRaw": { "bsonType": ["string","null"] },
+      "categoryId": { "bsonType": ["string", "null"] },
+      "categoryConfidence": { "bsonType": ["double","null"] },
+      "isPending": { "bsonType": "bool" },
+      "dedupeHash": { "bsonType": "string" }
+    }
+  }
+}
