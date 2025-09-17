@@ -1,0 +1,16 @@
+{
+  "$jsonSchema": {
+    "bsonType": "object",
+    "required": ["tenantId","merchantNormalized","cadence","lastSeenAt"],
+    "properties": {
+      "tenantId": { "bsonType": "string" },
+      "merchantNormalized": { "bsonType": "string" },
+      "cadence": { "enum": ["weekly","monthly","quarterly","yearly","unknown"] },
+      "lastSeenAt": { "bsonType": "string" },
+      "nextExpectedAt": { "bsonType": ["string","null"] },
+      "avgAmount": { "bsonType": ["double","decimal","null"] },
+      "confidence": { "bsonType": ["double","null"] },
+      "status": { "enum": ["candidate","confirmed","dismissed"] }
+    }
+  }
+}

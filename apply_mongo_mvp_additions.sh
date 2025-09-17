@@ -1,0 +1,413 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="."
+mk() { mkdir -p "$ROOT/$1"; }
+
+mk backend/api
+mk backend/common
+mk backend/services
+mk mongo/indexes
+mk mongo/validators
+mk mongo/aggregations
+mk scripts
+mk seed
+mk docs
+
+cat > "$ROOT/docs/README_MVP_Mongo.md" << 'E1'
+# Mongo-first MVP Additions
+This folder contains drop-in files to align with the "Money Autopilot" MVP:
+- Mongo validators & indexes
+- Aggregation pipelines (subscriptions detection, monthly rollups)
+- FastAPI endpoints (CSV import, rules test, subscriptions, insights, export)
+- Tenant guard helpers
+- Seed data & scripts
+See scripts/apply_mongo_schema.py and docs/README_MVP_Mongo.md for usage.
+E1
+
+cat > "$ROOT/backend/common/db.py" << 'E1'
+import os
+from functools import lru_cache
+from pymongo import MongoClient
+
+@lru_cache(maxsize=1)
+def _client() -> MongoClient:
+    uri = os.getenv("MONGODB_URI")
+    if not uri:
+        raise RuntimeError("MONGODB_URI not set")
+    return MongoClient(uri)
+
+def get_db():
+    name = os.getenv("MONGO_DB_NAME", "personal_finance")
+    return _client()[name]
+E1
+
+cat > "$ROOT/backend/common/tenancy.py" << 'E1'
+from typing import Dict, Any
+TENANT_CLAIM = "tenantId"
+def tenant_filter(tenant_id: str, base: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    q = dict(base or {})
+    q[TENANT_CLAIM] = tenant_id
+    return q
+def require_tenant_id(claims: Dict[str, Any]) -> str:
+    tid = claims.get(TENANT_CLAIM)
+    if not tid:
+        raise ValueError("Missing tenantId in token/claims")
+    return tid
+E1
+
+cat > "$ROOT/backend/services/hashutil.py" << 'E1'
+import hashlib
+def txn_dedupe_hash(account_id: str, posted_at: str, amount: float, merchant: str | None, description_raw: str | None) -> str:
+    key = f"{account_id}|{posted_at}|{amount:.2f}|{merchant or ''}|{description_raw or ''}"
+    return hashlib.sha256(key.encode('utf-8')).hexdigest()
+E1
+
+cat > "$ROOT/backend/services/rules.py" << 'E1'
+from typing import Any, Dict, List
+import re
+class Rule:
+    def __init__(self, rule_doc: Dict[str, Any]):
+        self.rule = rule_doc
+        self.priority = rule_doc.get("priority", 1000)
+        self.enabled = rule_doc.get("enabled", True)
+        self.conditions = rule_doc.get("conditions", [])
+        self.actions = rule_doc.get("actions", [])
+    def matches(self, txn: Dict[str, Any]) -> bool:
+        for cond in self.conditions:
+            field = cond.get("field"); op = cond.get("op"); val = cond.get("value")
+            tv = (txn.get(field) or "")
+            if op == "regex":
+                if re.search(val, str(tv)) is None: return False
+            elif op == "contains":
+                if str(val).lower() not in str(tv).lower(): return False
+            elif op == "gte":
+                if float(tv) < float(val): return False
+            elif op == "lte":
+                if float(tv) > float(val): return False
+            else:
+                return False
+        return True
+    def apply(self, txn: Dict[str, Any]) -> Dict[str, Any]:
+        out = dict(txn)
+        for act in self.actions:
+            t = act.get("type")
+            if t == "set_category": out["categoryId"] = act.get("category_id")
+            elif t == "rename_merchant": out["merchant"] = act.get("to")
+            elif t == "add_tag":
+                tags = set(out.get("tags") or []); tags.add(act.get("tag")); out["tags"] = list(tags)
+        return out
+def pick_rule(rules: List[Dict[str, Any]], txn: Dict[str, Any]) -> Dict[str, Any] | None:
+    compiled = [Rule(r) for r in rules if r.get("enabled", True)]
+    compiled.sort(key=lambda r: r.priority)
+    for r in compiled:
+        if r.matches(txn): return r.rule
+    return None
+E1
+
+cat > "$ROOT/backend/services/categorize.py" << 'E1'
+from typing import Tuple
+import re
+COMMON_MERCHANTS = {
+    r"(?i)trader\\s*joe": "groceries",
+    r"(?i)whole\\s*foods": "groceries",
+    r"(?i)costco": "groceries",
+    r"(?i)netflix": "subscriptions",
+    r"(?i)spotify": "subscriptions",
+    r"(?i)uber\\s*eats": "dining",
+    r"(?i)mcdonald": "dining",
+    r"(?i)starbucks": "coffee"
+}
+def normalize_merchant(desc: str | None) -> str | None:
+    if not desc: return None
+    m = re.sub(r"[^a-zA-Z0-9\\s]", "", desc)
+    m = re.sub(r"\\s+", " ", m).strip().upper()
+    return m
+def heuristic_category(merchant_norm: str | None, description_raw: str | None) -> Tuple[str | None, float]:
+    cand = description_raw or ""
+    for rx, cat in COMMON_MERCHANTS.items():
+        if re.search(rx, cand): return (cat, 0.7)
+    return (None, 0.0)
+E1
+
+cat > "$ROOT/backend/services/import_csv.py" << 'E1'
+from typing import List, Dict, Any
+import csv, io
+from pymongo import UpdateOne
+from .hashutil import txn_dedupe_hash
+from .categorize import normalize_merchant, heuristic_category
+def parse_csv_and_build_docs(file_bytes: bytes, tenant_id: str, account_id: str, currency: str = "USD") -> List[Dict[str, Any]]:
+    text = file_bytes.decode("utf-8", errors="ignore")
+    reader = csv.DictReader(io.StringIO(text))
+    out = []
+    for row in reader:
+        posted_at = row.get("Date") or row.get("Posted") or row.get("posted_at")
+        amount = float(row.get("Amount") or row.get("amount") or 0.0)
+        desc = row.get("Description") or row.get("Payee") or row.get("Memo") or ""
+        merchant_norm = normalize_merchant(desc)
+        dedupe = txn_dedupe_hash(account_id, posted_at, amount, merchant_norm, desc)
+        cat_guess, conf = heuristic_category(merchant_norm, desc)
+        doc = {
+            "tenantId": tenant_id,
+            "accountId": account_id,
+            "postedAt": posted_at,
+            "amount": amount,
+            "currency": currency,
+            "merchant": merchant_norm,
+            "descriptionRaw": desc,
+            "categoryId": cat_guess,
+            "categoryConfidence": conf,
+            "isPending": False,
+            "dedupeHash": dedupe
+        }
+        out.append(doc)
+    return out
+def bulk_upsert_transactions(col, docs: List[Dict[str, Any]]):
+    ops = []
+    for d in docs:
+        ops.append(UpdateOne(
+            {"tenantId": d["tenantId"], "accountId": d["accountId"], "dedupeHash": d["dedupeHash"]},
+            {"$setOnInsert": d},
+            upsert=True
+        ))
+    if ops:
+        res = col.bulk_write(ops, ordered=False)
+        return {"upserts": res.upserted_count, "matched": res.matched_count, "modified": res.modified_count}
+    return {"upserts": 0, "matched": 0, "modified": 0}
+E1
+
+cat > "$ROOT/backend/api/app.py" << 'E1'
+import os
+from fastapi import FastAPI, UploadFile, File, Depends
+from pydantic import BaseModel
+from typing import List, Dict, Any
+from backend.common.db import get_db
+from backend.common.tenancy import require_tenant_id
+from backend.services.import_csv import parse_csv_and_build_docs, bulk_upsert_transactions
+from backend.services.rules import pick_rule
+
+app = FastAPI(title="Money Autopilot MVP API")
+
+def get_claims():
+    return {"tenantId": "demo-tenant"}
+
+class RuleDoc(BaseModel):
+    name: str
+    priority: int = 100
+    enabled: bool = True
+    conditions: List[Dict[str, Any]] = []
+    actions: List[Dict[str, Any]] = []
+
+@app.post("/imports/csv")
+async def import_csv(account_id: str, file: UploadFile = File(...), claims: Dict[str, Any] = Depends(get_claims)):
+    db = get_db()
+    tenant_id = require_tenant_id(claims)
+    data = await file.read()
+    docs = parse_csv_and_build_docs(data, tenant_id=tenant_id, account_id=account_id)
+    stats = bulk_upsert_transactions(db.transactions, docs)
+    return {"status": "ok", "stats": stats}
+
+@app.post("/rules/test")
+async def rules_test(sample_txn: Dict[str, Any], rules: List[RuleDoc]):
+    r = pick_rule([r.model_dump() for r in rules], sample_txn)
+    return {"matchedRule": r}
+
+@app.get("/subscriptions")
+async def list_subscriptions(claims: Dict[str, Any] = Depends(get_claims)):
+    db = get_db()
+    tenant_id = require_tenant_id(claims)
+    cur = db.subscriptions.find({"tenantId": tenant_id}).limit(200)
+    return [s for s in cur]
+
+@app.get("/insights/{yyyy_mm}")
+async def insights(yyyy_mm: str, claims: Dict[str, Any] = Depends(get_claims)):
+    db = get_db()
+    tenant_id = require_tenant_id(claims)
+    out = {
+        "month": yyyy_mm,
+        "categoryDeltas": list(db.rollups_category_month.find({"tenantId": tenant_id, "month": yyyy_mm})),
+    }
+    return out
+
+@app.post("/exports/full")
+async def export_full(claims: Dict[str, Any] = Depends(get_claims)):
+    import json, zipfile, datetime
+    db = get_db()
+    tenant_id = require_tenant_id(claims)
+    export_dir = os.getenv("EXPORT_DIR", "exports")
+    os.makedirs(export_dir, exist_ok=True)
+    datasets = {
+        "accounts": list(db.accounts.find({"tenantId": tenant_id})),
+        "transactions": list(db.transactions.find({"tenantId": tenant_id})),
+        "rules": list(db.rules.find({"tenantId": tenant_id})),
+        "subscriptions": list(db.subscriptions.find({"tenantId": tenant_id})),
+        "budgets": list(db.budgets.find({"tenantId": tenant_id})),
+        "insights": list(db.insights.find({"tenantId": tenant_id})),
+        "auditLog": list(db.audit_log.find({"tenantId": tenant_id})),
+    }
+    ts = datetime.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    zip_path = os.path.join(export_dir, f"export_{tenant_id}_{ts}.zip")
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+        manifest = []
+        for name, rows in datasets.items():
+            fn = f"{name}.json"
+            z.writestr(fn, json.dumps(rows, default=str, ensure_ascii=False, indent=2))
+            manifest.append({"name": name, "count": len(rows)})
+        z.writestr("manifest.json", json.dumps({"tenantId": tenant_id, "datasets": manifest}, indent=2))
+    return {"status": "ok", "file": zip_path}
+E1
+
+cat > "$ROOT/mongo/validators/transactions.validator.json" << 'E1'
+{
+  "$jsonSchema": {
+    "bsonType": "object",
+    "required": ["tenantId","accountId","postedAt","amount","currency","dedupeHash"],
+    "properties": {
+      "tenantId": { "bsonType": "string" },
+      "accountId": { "bsonType": "string" },
+      "postedAt": { "bsonType": "string" },
+      "amount": { "bsonType": ["double", "decimal"] },
+      "currency": { "bsonType": "string" },
+      "merchant": { "bsonType": ["string","null"] },
+      "descriptionRaw": { "bsonType": ["string","null"] },
+      "categoryId": { "bsonType": ["string", "null"] },
+      "categoryConfidence": { "bsonType": ["double","null"] },
+      "isPending": { "bsonType": "bool" },
+      "dedupeHash": { "bsonType": "string" }
+    }
+  }
+}
+E1
+
+cat > "$ROOT/mongo/validators/subscriptions.validator.json" << 'E1'
+{
+  "$jsonSchema": {
+    "bsonType": "object",
+    "required": ["tenantId","merchantNormalized","cadence","lastSeenAt"],
+    "properties": {
+      "tenantId": { "bsonType": "string" },
+      "merchantNormalized": { "bsonType": "string" },
+      "cadence": { "enum": ["weekly","monthly","quarterly","yearly","unknown"] },
+      "lastSeenAt": { "bsonType": "string" },
+      "nextExpectedAt": { "bsonType": ["string","null"] },
+      "avgAmount": { "bsonType": ["double","decimal","null"] },
+      "confidence": { "bsonType": ["double","null"] },
+      "status": { "enum": ["candidate","confirmed","dismissed"] }
+    }
+  }
+}
+E1
+
+cat > "$ROOT/mongo/indexes/create_indexes.js" << 'E1'
+db.transactions.createIndex({ tenantId: 1, accountId: 1, dedupeHash: 1 }, { unique: true, name: "uniq_tenant_account_dedupe" })
+db.transactions.createIndex({ tenantId: 1, accountId: 1, postedAt: 1 })
+db.transactions.createIndex({ tenantId: 1, categoryId: 1, postedAt: 1 })
+db.subscriptions.createIndex({ tenantId: 1, merchantNormalized: 1 }, { unique: true })
+db.rollups_category_month.createIndex({ tenantId: 1, month: 1, categoryId: 1 }, { unique: true })
+db.rules.createIndex({ tenantId: 1, priority: 1 })
+db.accounts.createIndex({ tenantId: 1 })
+db.budgets.createIndex({ tenantId: 1, month: 1 }, { unique: true })
+E1
+
+cat > "$ROOT/mongo/aggregations/subscriptions_pipeline.js" << 'E1'
+const TENANT_ID="__TENANT_ID__";
+db.getCollection("transactions").aggregate([
+  { $match: { tenantId: TENANT_ID, amount: { $lt: 0 } } },
+  { $addFields: { merchantKey: { $ifNull: ["$merchant", "$descriptionRaw"] } } },
+  { $setWindowFields: {
+      partitionBy: { merchantKey: "$merchantKey" },
+      sortBy: { postedAt: 1 },
+      output: { prevDate: { $shift: { output: "$postedAt", by: -1 } }, prevAmount: { $shift: { output: "$amount", by: -1 } } }
+  }},
+  { $addFields: {
+      gapDays: { $divide: [ { $subtract: [ { $toDate: "$postedAt" }, { $toDate: "$prevDate" } ] }, 86400000 ] },
+      amountDelta: { $abs: { $subtract: ["$amount", "$prevAmount"] } }
+  }},
+  { $match: { prevDate: { $ne: null } } },
+  { $group: {
+      _id: { merchantKey: "$merchantKey" },
+      avgGap: { $avg: "$gapDays" }, stdGap: { $stdDevPop: "$gapDays" }, cnt: { $sum: 1 },
+      avgAmount: { $avg: "$amount" }, lastSeenAt: { $max: "$postedAt" }
+  }},
+  { $addFields: {
+      cadence: { $switch: { branches: [
+        { case: { $and: [ { $gte: ["$avgGap", 27] }, { $lte: ["$avgGap", 33] } ] }, then: "monthly" },
+        { case: { $and: [ { $gte: ["$avgGap", 6] }, { $lte: ["$avgGap", 8] } ] }, then: "weekly" },
+        { case: { $and: [ { $gte: ["$avgGap", 85] }, { $lte: ["$avgGap", 95] } ] }, then: "quarterly" }
+      ], default: "unknown" } },
+      confidence: { $min: [1, { $divide: ["$cnt", 6] }] }
+  }},
+  { $project: {
+      tenantId: TENANT_ID, merchantNormalized: "$_id.merchantKey", cadence: 1, lastSeenAt: 1, avgAmount: 1,
+      nextExpectedAt: { $dateToString: { format: "%Y-%m-%d", date: { $dateAdd: { startDate: { $toDate: "$lastSeenAt" }, unit: "day", amount: { $round: "$avgGap" } } } } },
+      confidence: 1, status: { $literal: "candidate" }
+  }},
+  { $merge: { into: "subscriptions", on: ["tenantId","merchantNormalized"], whenMatched: "replace", whenNotMatched: "insert" } }
+])
+E1
+
+cat > "$ROOT/mongo/aggregations/rollups_category_month.js" << 'E1'
+const TENANT_ID="__TENANT_ID__";
+db.getCollection("transactions").aggregate([
+  { $match: { tenantId: TENANT_ID } },
+  { $addFields: { month: { $dateToString: { format: "%Y-%m", date: { $toDate: "$postedAt" } } } } },
+  { $group: { _id: { month: "$month", categoryId: "$categoryId" }, total: { $sum: "$amount" }, count: { $sum: 1 } } },
+  { $project: { _id: 0, tenantId: TENANT_ID, month: "$_id.month", categoryId: "$_id.categoryId", total: 1, count: 1 } },
+  { $merge: { into: "rollups_category_month", on: ["tenantId","month","categoryId"], whenMatched: "replace", whenNotMatched: "insert" } }
+])
+E1
+
+cat > "$ROOT/scripts/apply_mongo_schema.py" << 'E1'
+import os, json
+from pymongo import MongoClient
+uri = os.getenv("MONGODB_URI")
+db_name = os.getenv("MONGO_DB_NAME", "personal_finance")
+if not uri: raise SystemExit("Set MONGODB_URI")
+client = MongoClient(uri); db = client[db_name]
+def apply_validator(coll, path):
+    with open(path, "r") as f: validator = json.load(f)
+    try: db.command({"collMod": coll, "validator": validator})
+    except Exception: db.create_collection(coll, validator=validator)
+apply_validator("transactions", "mongo/validators/transactions.validator.json")
+apply_validator("subscriptions", "mongo/validators/subscriptions.validator.json")
+db.transactions.create_index([("tenantId",1),("accountId",1),("dedupeHash",1)], unique=True, name="uniq_tenant_account_dedupe")
+db.transactions.create_index([("tenantId",1),("accountId",1),("postedAt",1)])
+db.transactions.create_index([("tenantId",1),("categoryId",1),("postedAt",1)])
+db.subscriptions.create_index([("tenantId",1),("merchantNormalized",1)], unique=True)
+db.rollups_category_month.create_index([("tenantId",1),("month",1),("categoryId",1)], unique=True)
+db.rules.create_index([("tenantId",1),("priority",1)])
+db.accounts.create_index([("tenantId",1)])
+db.budgets.create_index([("tenantId",1),("month",1)], unique=True)
+print("Validators and indexes applied to", db_name)
+E1
+
+cat > "$ROOT/scripts/run_aggregations.py" << 'E1'
+import os, subprocess
+tenant = os.getenv("TENANT_ID", "demo-tenant")
+mongo_uri = os.getenv("MONGODB_URI")
+db_name = os.getenv("MONGO_DB_NAME","personal_finance")
+if not mongo_uri: raise SystemExit("Set MONGODB_URI")
+def run_js(path):
+    with open(path, "r") as f: js = f.read().replace("__TENANT_ID__", tenant)
+    subprocess.run(["mongosh", f"{mongo_uri}/{db_name}", "--eval", js], check=True)
+run_js("mongo/aggregations/subscriptions_pipeline.js")
+run_js("mongo/aggregations/rollups_category_month.js")
+print("Aggregation pipelines executed.")
+E1
+
+cat > "$ROOT/seed/demo_transactions.csv" << 'E1'
+Date,Description,Amount,Account Name,Balance
+2025-07-01,NETFLIX.COM,-15.49,Chase Sapphire,2300.00
+2025-07-02,TRADER JOES #123,-54.23,Chase Sapphire,2245.77
+2025-07-09,UBER EATS,-23.10,Chase Sapphire,2222.67
+2025-07-31,WHOLE FOODS,-88.90,Chase Sapphire,2100.12
+2025-08-01,NETFLIX.COM,-15.49,Chase Sapphire,2084.63
+E1
+
+cat > "$ROOT/.env.example" << 'E1'
+MONGODB_URI=mongodb+srv://USER:PASS@CLUSTER0.h2csr3m.mongodb.net
+MONGO_DB_NAME=personal_finance
+EXPORT_DIR=exports
+JWT_TENANT_CLAIM=tenantId
+TENANT_ID=demo-tenant
+E1
