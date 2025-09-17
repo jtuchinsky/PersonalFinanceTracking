@@ -438,9 +438,20 @@ jobs:
 
       - name: Commit to new branch
         run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b feature/mongo-mvp-additions
-          git add backend mongo scripts seed docs .env.example apply_mongo_mvp_additions.sh
-          git commit -m "Add Mongo-first MVP: CSV import, rules test, subscriptions/rollups, validators/indexes, export endpoint"
+
+          # create or reuse the branch
+          git checkout -B feature/mongo-mvp-additions
+
+          # add everything that isn't ignored
+          git add backend mongo scripts seed docs apply_mongo_mvp_additions.sh
+
+          # force-add the example env even if .gitignore ignores .env*
+          git add -f .env.example
+
+          # commit if there are changes
+          git commit -m "Add Mongo-first MVP: CSV import, rules test, subscriptions/rollups, validators/indexes, export endpoint" || echo "Nothing to commit"
+          
           git push --set-upstream origin feature/mongo-mvp-additions
