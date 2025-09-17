@@ -79,31 +79,39 @@ yarn test
 
 ### Database Setup
 ```bash
-# Seed MongoDB with sample data
+# Apply database indexes and validation (required)
+cd mongo_seed_kit
+mongosh personal_finance_tracker < mongo_indexes.js
+
+# Seed MongoDB with sample data (optional)
 cd mongo_seed_kit
 python seed_mongo.py
 
-# Apply database indexes
-cd mongo_seed_kit
-mongosh < mongo_indexes.js
+# For complete MongoDB setup instructions, see MONGODB_SETUP.md
 ```
 
 ## Database Schema
 
 ### Collections
-- **users** - User accounts with authentication and admin flags
+- **users** - User accounts with authentication and admin flags (UUID-based)
 - **accounts** - Financial accounts (checking, savings, credit cards)
 - **transactions** - Financial transactions with categories and amounts
 - **categories** - Expense categories with colors and icons
-- **account_credentials** - Encrypted banking login credentials
+- **account_credentials** - Encrypted banking login credentials (Fernet encryption)
 - **user_activities** - Audit log for user and admin actions
+
+### Database Name
+- **Database**: `personal_finance_tracker` (updated from `finance_tracker`)
+- **Collections**: All collections use UUID strings for application-level IDs
+- **Relationships**: Document references using UUID identifiers
+- **Validation**: MongoDB schema validation enabled for data integrity
 
 ### Environment Variables
 Backend requires these environment variables in `backend/.env`:
-- `MONGO_URL` - MongoDB connection string
-- `DB_NAME` - Database name (default: finance_tracker)  
+- `MONGO_URL` - MongoDB connection string (supports local, Docker, Atlas)
+- `DB_NAME` - Database name (default: personal_finance_tracker)
 - `JWT_SECRET` - Secret key for JWT token signing
-- `ENCRYPTION_KEY` - Key for encrypting banking credentials
+- `ENCRYPTION_KEY` - 32-character key for encrypting banking credentials
 - `CORS_ORIGINS` - Allowed CORS origins (comma-separated)
 
 ## Code Conventions

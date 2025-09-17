@@ -2,6 +2,13 @@ import os
 from functools import lru_cache
 from pymongo import MongoClient
 
+from dotenv import load_dotenv
+load_dotenv()  # <— add this
+
+import os
+from functools import lru_cache
+from pymongo import MongoClient
+
 @lru_cache(maxsize=1)
 def _client() -> MongoClient:
     uri = os.getenv("MONGODB_URI")

@@ -234,20 +234,25 @@ DELETE /admin/users/{id}    - Delete user account
 ```bash
 # Backend environment variables
 MONGO_URL=mongodb://localhost:27017
-DB_NAME=finance_tracker
+DB_NAME=personal_finance_tracker
 JWT_SECRET=your-secret-key
-ENCRYPTION_KEY=your-encryption-key
+ENCRYPTION_KEY=your-32-character-encryption-key
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 ```
 
-### Database Collections
+### Database Collections (MongoDB)
 ```
-users              - User accounts and admin flags
-user_activities    - System activity logs  
-accounts          - Financial accounts
-transactions      - Financial transactions
-categories        - Expense categories
-account_credentials - Encrypted banking credentials
+Database: personal_finance_tracker
+├── users              - User accounts and admin flags (UUID-based)
+├── user_activities    - System activity logs and audit trail
+├── accounts          - Financial accounts (checking, savings, credit_card)
+├── transactions      - Financial transactions with categories
+├── categories        - Expense categories with colors and icons
+└── account_credentials - Encrypted banking credentials (Fernet)
 ```
+
+### MongoDB Setup
+For complete database setup instructions including indexes, validation, and performance optimization, see [MONGODB_SETUP.md](MONGODB_SETUP.md).
 
 ### Maintenance Tasks
 - **Regular Activity Review**: Monitor system activities for unusual patterns
