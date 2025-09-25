@@ -228,7 +228,7 @@ Account Details:
 
 All your account data, including transactions and financial information, has been permanently removed from our system.
 
-Best regards,
+1Best regards,
 Finance Tracker Admin Team"""
             },
             "account_locked": {

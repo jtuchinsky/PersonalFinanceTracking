@@ -16,14 +16,18 @@ Personal Finance Tracker is a full-stack web application built with FastAPI (bac
 
 ## Architecture
 
-### Backend (FastAPI)
-- **Entry point**: `backend/server.py` - Main FastAPI application with all API routes
+### Backend (FastAPI) - Split Architecture
+- **User Server**: `backend/user_server.py` - User-facing API (port 8000)
+- **Admin Server**: `backend/admin_server.py` - Admin-only API (port 8001)
+- **Shared Modules**: `backend/shared/` - Common database, auth, models, and utilities
 - **Database**: MongoDB with Motor (async driver)
 - **Authentication**: JWT-based with bcrypt password hashing
 - **Security**: Fernet encryption for banking credentials
 - **Admin tools**: `backend/create_admin.py` for admin account creation
 
-### Frontend (React)
+### Frontend (React) - Split Applications
+- **User Frontend**: `frontend/` - User application (port 3000)
+- **Admin Frontend**: `frontend-admin/` - Admin application (port 3001)
 - **Build system**: Create React App with CRACO for customization
 - **UI Components**: Radix UI primitives with shadcn/ui styling
 - **Styling**: TailwindCSS with custom configuration
@@ -31,11 +35,15 @@ Personal Finance Tracker is a full-stack web application built with FastAPI (bac
 - **Routing**: React Router for navigation
 
 ### Key Components
+#### User Application
 - `Dashboard.js` - Main user dashboard with financial overview
-- `AdminDashboard.js` - Admin panel for user management
 - `AccountManager.js` - Financial account management
 - `TransactionForm.js`/`TransactionList.js` - Transaction handling
 - `Login.js`/`Register.js` - Authentication components
+
+#### Admin Application
+- `AdminDashboard.js` - Admin panel for user management
+- `AdminLogin.js` - Admin-specific authentication
 
 ## Development Commands
 
@@ -45,9 +53,19 @@ Personal Finance Tracker is a full-stack web application built with FastAPI (bac
 cd backend
 pip install -r requirements.txt
 
-# Start development server
+# Start USER server (port 8000)
 cd backend
-uvicorn server:app --reload --host 0.0.0.0 --port 8000
+python user_server.py
+
+# OR using uvicorn directly:
+uvicorn user_server:app --reload --host 0.0.0.0 --port 8000
+
+# Start ADMIN server (port 8001)
+cd backend
+python admin_server.py
+
+# OR using uvicorn directly:
+uvicorn admin_server:app --reload --host 0.0.0.0 --port 8001
 
 # Create admin account (interactive)
 cd backend
@@ -60,11 +78,12 @@ python create_admin.py list
 
 ### Frontend Development
 ```bash
+# USER FRONTEND (port 3000)
 # Install dependencies
 cd frontend
 yarn install
 
-# Start development server (port 3000)
+# Start development server
 cd frontend
 yarn start
 
@@ -72,8 +91,22 @@ yarn start
 cd frontend
 yarn build
 
+# ADMIN FRONTEND (port 3001)
+# Install dependencies
+cd frontend-admin
+yarn install
+
+# Start development server
+REACT_APP_ADMIN_BACKEND_URL=http://localhost:8001 PORT=3001 yarn start
+
+# Build for production
+cd frontend-admin
+yarn build
+
 # Run tests
 cd frontend
+yarn test
+cd ../frontend-admin
 yarn test
 ```
 

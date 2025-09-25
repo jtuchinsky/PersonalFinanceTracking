@@ -14,9 +14,8 @@ import AddAccount from './components/AddAccount';
 import AccountManager from './components/AccountManager';
 import EditAccount from './components/EditAccount';
 import SankeyDiagram from './components/SankeyDiagram';
-import AdminDashboard from './components/AdminDashboard';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = process.env.REACT_APP_USER_BACKEND_URL || 'http://localhost:8000';
 const API = `${BACKEND_URL}/api`;
 
 // Auth Context
@@ -124,17 +123,13 @@ function App() {
               path="/edit-account/:accountId" 
               element={user ? <EditAccount /> : <Navigate to="/login" />} 
             />
-            <Route 
-              path="/analytics" 
-              element={user ? <SankeyDiagram /> : <Navigate to="/login" />} 
+            <Route
+              path="/analytics"
+              element={user ? <SankeyDiagram /> : <Navigate to="/login" />}
             />
-            <Route 
-              path="/admin" 
-              element={user && user.is_admin ? <AdminDashboard /> : <Navigate to="/login" />} 
-            />
-            <Route 
-              path="/" 
-              element={<Navigate to={user ? "/dashboard" : "/login"} />} 
+            <Route
+              path="/"
+              element={<Navigate to={user ? "/dashboard" : "/login"} />}
             />
           </Routes>
         </Router>
