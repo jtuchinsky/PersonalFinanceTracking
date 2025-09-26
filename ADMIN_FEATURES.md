@@ -7,8 +7,10 @@ The Finance Tracker includes a comprehensive admin system that allows administra
 
 ### 🔐 Admin Authentication
 - **Secure Admin Login**: JWT-based authentication with admin role verification
-- **Admin Identification**: Users with `is_admin: true` flag can access admin features
+- **Database Separation**: Admins stored in separate `admins` collection, completely isolated from users
+- **Role-Based Access**: Support for different admin roles (admin, super_admin) with granular permissions
 - **Admin Protection**: Cannot delete or modify other admin accounts through the system
+- **Separate Servers**: Admin functionality runs on dedicated server (port 8001)
 
 ### 📊 Admin Dashboard Features
 
@@ -46,7 +48,7 @@ The Finance Tracker includes a comprehensive admin system that allows administra
 
 #### **Method 1: Command-Line Tool (Interactive)**
 ```bash
-cd /app/backend
+cd backend
 python create_admin.py create
 ```
 
@@ -56,40 +58,53 @@ python create_admin.py create
 - Password (minimum 8 characters, hidden input)
 - Password confirmation
 
-#### **Method 2: Command-Line Tool (Non-Interactive)**
+#### **Method 2: Database Seeding (Creates Default Admin)**
 ```bash
-cd /app/backend
-python create_admin_demo.py create admin@company.com 'John Smith' 'admin123'
+cd mongo_seed_kit
+export MONGODB_URI="your_mongodb_connection_string"
+python seed_mongo.py --db finance_tracker --force
 ```
+
+**Default Admin Created:**
+- Email: admin@example.com
+- Password: Admin#12345
+- Role: super_admin
 
 #### **Method 3: List Existing Admins**
 ```bash
-cd /app/backend
+cd backend
 python create_admin.py list
 ```
 
-### Pre-Created Test Admin Accounts
+### Default Admin Account (Created by Seeding)
 
-| Email | Name | Password | Status |
-|-------|------|----------|--------|
-| admin@finance.com | System Administrator | admin123 | Active |
-| manager@finance.com | Finance Manager | manager123 | Active |
-| supervisor@finance.com | System Supervisor | supervisor123 | Active |
+| Email | Name | Password | Role | Status |
+|-------|------|----------|------|--------|
+| admin@example.com | System Administrator | Admin#12345 | super_admin | Active |
+
+**Additional Test Accounts:**
+
+| Email | Name | Password | Role | Status |
+|-------|------|----------|------|--------|
+| user@example.com | John Doe | User#12345 | user | Active |
 
 ## 🎨 Admin Interface
 
 ### Accessing Admin Panel
-1. **Login** with admin credentials
-2. **Look for Admin Panel button** in the main dashboard (purple-themed with shield icon)
-3. **Click Admin Panel** to access administrative features
+1. **Navigate** to admin frontend: http://localhost:3001
+2. **Login** with admin credentials (separate from user login)
+3. **Admin Dashboard** loads automatically after successful authentication
+4. **Dedicated Interface**: Completely separate admin application on port 3001
 
 ### Admin Dashboard Layout
 - **Header**: Welcome message and logout option
-- **Tab Navigation**: 
+- **Tab Navigation**:
   - Overview (System statistics)
   - User Management (User control)
   - Activity Logs (System monitoring)
   - Email Logs (Notification tracking)
+- **Separate Backend**: Admin API runs on dedicated server (port 8001)
+- **Security**: Admin routes protected by admin-only JWT tokens
 
 ## 👥 User Management
 
@@ -168,8 +183,11 @@ Content: Welcome message with admin privileges and responsibilities
 - **Session Management**: Proper session handling and timeout
 
 ### Activity Logging
+- **Separate Audit Trails**: User activities and admin activities stored in separate collections
+- **User Activities**: Logged in `user_activities` collection
+- **Admin Activities**: Logged in `admin_activities` collection with target user tracking
 - **Complete Audit Trail**: Every action logged with details
-- **User Identification**: User ID and action details recorded
+- **User Identification**: User ID/Admin ID and action details recorded
 - **Timestamp Tracking**: Precise time logging for all activities
 - **IP Address Logging**: Track user locations and access patterns
 
@@ -206,27 +224,35 @@ Activity Types Tracked:
 ## 🛠 Technical Implementation
 
 ### Backend Architecture
+- **Split Architecture**: Separate user server (port 8000) and admin server (port 8001)
 - **FastAPI Framework**: Modern, fast web framework
-- **MongoDB Database**: Document-based data storage
-- **JWT Authentication**: Secure token-based auth
+- **MongoDB Database**: Document-based data storage with separate collections
+- **JWT Authentication**: Secure token-based auth with user_type differentiation
 - **Async Operations**: High-performance async/await patterns
+- **Shared Modules**: Common database, auth, models, and utilities
 
-### Admin API Endpoints
+### Admin API Endpoints (Port 8001)
 ```
-GET  /admin/stats           - System statistics
-GET  /admin/users           - User management list  
-GET  /admin/activities      - Activity logs
-GET  /admin/emails          - Email notification logs
-POST /admin/users/{id}/lock - Lock user account
-POST /admin/users/{id}/unlock - Unlock user account
-DELETE /admin/users/{id}    - Delete user account
+# Authentication
+POST /api/auth/login        - Admin login (separate from user login)
+
+# Admin Management
+GET  /api/admin/stats       - System statistics
+GET  /api/admin/users       - User management list
+GET  /api/admin/activities  - Activity logs
+GET  /api/admin/emails      - Email notification logs
+POST /api/admin/users/{id}/lock   - Lock user account
+POST /api/admin/users/{id}/unlock - Unlock user account
+DELETE /api/admin/users/{id}      - Delete user account
 ```
 
 ### Frontend Architecture
+- **Split Applications**: User frontend (port 3000) and admin frontend (port 3001)
 - **React Components**: Modern React-based UI
 - **Responsive Design**: Mobile-friendly interface
 - **Real-time Updates**: Live data updates
 - **Professional UI**: Clean, modern admin interface
+- **Separate Authentication**: Independent admin login system
 
 ## 🔧 Development & Maintenance
 
@@ -241,11 +267,13 @@ ENCRYPTION_KEY=your-encryption-key
 
 ### Database Collections
 ```
-users              - User accounts and admin flags
-user_activities    - System activity logs  
-accounts          - Financial accounts
-transactions      - Financial transactions
-categories        - Expense categories
+users               - Regular user accounts (no admin flags)
+admins              - Admin accounts with roles and permissions
+user_activities     - User action audit logs
+admin_activities    - Admin action audit logs
+accounts           - Financial accounts
+transactions       - Financial transactions
+categories         - Expense categories
 account_credentials - Encrypted banking credentials
 ```
 
@@ -259,11 +287,12 @@ account_credentials - Encrypted banking credentials
 
 ### Common Issues
 
-#### **Admin Panel Not Visible**
+#### **Admin Panel Not Accessible**
 ```
-Solution: Ensure user has is_admin: true flag in database
-Check: User logged in with correct admin credentials
-Verify: Admin middleware is functioning correctly
+Solution: Ensure admin account exists in admins collection
+Check: Navigate to correct admin frontend URL (port 3001)
+Verify: Admin server is running on port 8001
+Confirm: Admin login credentials are correct
 ```
 
 #### **Email Notifications Not Sending**
@@ -336,6 +365,6 @@ The system is designed to be intuitive, secure, and scalable, providing administ
 
 ---
 
-**Last Updated**: September 10, 2025  
-**Version**: 1.0  
+**Last Updated**: September 25, 2025
+**Version**: 2.0 - Database Architecture Separation Update
 **Author**: Finance Tracker Development Team

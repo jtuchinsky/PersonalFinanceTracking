@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 from shared.database import db, shutdown_db_client
 from shared.auth import get_admin_user, verify_password, create_access_token
-from shared.models import AdminStats, UserManagement, UserActivity, UserLogin, User
+from shared.models import AdminStats, UserManagement, UserActivity, AdminLogin, Admin, AdminActivity
 from shared.utils import log_user_activity
 from shared.email import email_service
 
@@ -19,40 +19,56 @@ auth_router = APIRouter(prefix="/api/auth")
 
 # Admin authentication routes
 @auth_router.post("/login")
-async def admin_login(login_data: UserLogin):
-    user = await db.users.find_one({"email": login_data.email})
-    if not user or not verify_password(login_data.password, user["password"]):
-        await log_user_activity("unknown", "failed_admin_login", f"Failed admin login attempt for {login_data.email}")
+async def admin_login(login_data: AdminLogin):
+    admin = await db.admins.find_one({"email": login_data.email})
+    if not admin or not verify_password(login_data.password, admin["password"]):
+        # Log failed login attempt
+        activity = AdminActivity(
+            admin_id="unknown",
+            action="failed_admin_login",
+            details=f"Failed admin login attempt for {login_data.email}"
+        )
+        await db.admin_activities.insert_one(activity.dict())
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # Check if user is admin
-    if not user.get("is_admin", False):
-        await log_user_activity(user["id"], "failed_admin_login", "Non-admin user attempted admin login")
-        raise HTTPException(status_code=403, detail="Access denied. Admin privileges required.")
-
     # Check account status
-    if user.get("account_status", "active") == "locked":
-        await log_user_activity(user["id"], "admin_login_blocked", "Admin login attempt on locked account")
+    if admin.get("account_status", "active") == "locked":
+        activity = AdminActivity(
+            admin_id=admin["id"],
+            action="admin_login_blocked",
+            details="Admin login attempt on locked account"
+        )
+        await db.admin_activities.insert_one(activity.dict())
         raise HTTPException(status_code=403, detail="Account is locked. Please contact system administrator.")
 
-    if user.get("account_status", "active") == "deleted":
-        await log_user_activity(user["id"], "admin_login_blocked", "Admin login attempt on deleted account")
+    if admin.get("account_status", "active") == "deleted":
+        activity = AdminActivity(
+            admin_id=admin["id"],
+            action="admin_login_blocked",
+            details="Admin login attempt on deleted account"
+        )
+        await db.admin_activities.insert_one(activity.dict())
         raise HTTPException(status_code=403, detail="Account not found.")
 
     # Update last login
-    await db.users.update_one(
-        {"id": user["id"]},
+    await db.admins.update_one(
+        {"id": admin["id"]},
         {"$set": {"last_login": datetime.now(timezone.utc)}}
     )
 
-    # Create token
-    token = create_access_token(user["id"], user["email"])
-    user_obj = User(**{k: v for k, v in user.items() if k != "password"})
+    # Create admin token
+    token = create_access_token(admin["id"], admin["email"], user_type="admin")
+    admin_obj = Admin(**{k: v for k, v in admin.items() if k != "password"})
 
     # Log successful admin login
-    await log_user_activity(user["id"], "admin_login", "Admin logged in successfully")
+    activity = AdminActivity(
+        admin_id=admin["id"],
+        action="admin_login",
+        details="Admin logged in successfully"
+    )
+    await db.admin_activities.insert_one(activity.dict())
 
-    return {"access_token": token, "token_type": "bearer", "user": user_obj}
+    return {"access_token": token, "token_type": "bearer", "user": admin_obj}
 
 # Create a router with the /api/admin prefix
 admin_router = APIRouter(prefix="/api/admin")

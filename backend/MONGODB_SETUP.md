@@ -51,9 +51,24 @@ This guide covers setting up MongoDB for the Personal Finance Tracker applicatio
 │ email              │         │ id (PK)            │
 │ name               │         │ action             │
 │ password (hashed)  │         │ details            │
-│ is_admin           │         │ ip_address         │
+h│ account_status     │         │ ip_address         │
+│ last_login         │         │ timestamp          │
+│ created_at         │         └─────────────────────┘
+│ updated_at         │
+└─────────────────────┘
+
+┌─────────────────────┐         ┌─────────────────────┐
+│       admins        │         │   admin_activities  │
+├─────────────────────┤         ├─────────────────────┤
+│ id (PK)            │◄────────┤ admin_id (FK)      │
+│ email              │         │ id (PK)            │
+│ name               │         │ action             │
+│ password (hashed)  │         │ details            │
+│ role               │         │ target_user_id     │
+│ permissions        │         │ ip_address         │
 │ account_status     │         │ timestamp          │
-│ last_login         │         └─────────────────────┘
+│ created_by         │         └─────────────────────┘
+│ last_login         │
 │ created_at         │
 │ updated_at         │
 └─────────────────────┘
@@ -102,7 +117,6 @@ This guide covers setting up MongoDB for the Personal Finance Tracker applicatio
   "email": "user@example.com",
   "name": "John Doe",
   "password": "hashed_password_with_bcrypt",
-  "is_admin": false,
   "account_status": "active|locked|deleted",
   "last_login": "2024-01-01T00:00:00Z",
   "created_at": "2024-01-01T00:00:00Z",
@@ -110,7 +124,25 @@ This guide covers setting up MongoDB for the Personal Finance Tracker applicatio
 }
 ```
 
-### 2. accounts
+### 2. admins
+**Purpose**: Store admin authentication, roles, and permissions
+```json
+{
+  "id": "uuid4",
+  "email": "admin@example.com",
+  "name": "System Administrator",
+  "password": "hashed_password_with_bcrypt",
+  "role": "admin|super_admin",
+  "permissions": ["user_management", "system_stats", "view_activities"],
+  "account_status": "active|locked|deleted",
+  "last_login": "2024-01-01T00:00:00Z",
+  "created_by": "admin_uuid4",
+  "created_at": "2024-01-01T00:00:00Z",
+  "updated_at": "2024-01-01T00:00:00Z"
+}
+```
+
+### 3. accounts
 **Purpose**: Store financial account information
 ```json
 {
@@ -127,7 +159,7 @@ This guide covers setting up MongoDB for the Personal Finance Tracker applicatio
 }
 ```
 
-### 3. transactions
+### 4. transactions
 **Purpose**: Store financial transactions
 ```json
 {
@@ -143,7 +175,7 @@ This guide covers setting up MongoDB for the Personal Finance Tracker applicatio
 }
 ```
 
-### 4. categories
+### 5. categories
 **Purpose**: Store expense/income categories
 ```json
 {
@@ -154,7 +186,7 @@ This guide covers setting up MongoDB for the Personal Finance Tracker applicatio
 }
 ```
 
-### 5. account_credentials
+### 6. account_credentials
 **Purpose**: Store encrypted banking login credentials
 ```json
 {
@@ -166,14 +198,28 @@ This guide covers setting up MongoDB for the Personal Finance Tracker applicatio
 }
 ```
 
-### 6. user_activities
-**Purpose**: Audit log for user and admin actions
+### 7. user_activities
+**Purpose**: Audit log for user actions
 ```json
 {
   "id": "uuid4",
   "user_id": "user_uuid4",
-  "action": "login|logout|create_account|admin_action",
+  "action": "login|logout|create_account|create_transaction",
   "details": "User logged in successfully",
+  "ip_address": "192.168.1.100",
+  "timestamp": "2024-01-01T00:00:00Z"
+}
+```
+
+### 8. admin_activities
+**Purpose**: Audit log for admin actions
+```json
+{
+  "id": "uuid4",
+  "admin_id": "admin_uuid4",
+  "action": "admin_login|admin_lock_user|admin_view_stats",
+  "details": "Admin locked account for user john@example.com",
+  "target_user_id": "user_uuid4",
   "ip_address": "192.168.1.100",
   "timestamp": "2024-01-01T00:00:00Z"
 }
@@ -193,8 +239,12 @@ use finance_tracker
 ### 2. Create Indexes for Performance
 ```javascript
 // User indexes
-db.users.createIndex({ "email": 1 }, { unique: true })
-db.users.createIndex({ "is_admin": 1 })
+db.users.createIndex({ "email": 1 }, { unique: true, name: "uniq_user_email" })
+db.users.createIndex({ "id": 1 }, { unique: true, name: "uniq_user_id" })
+
+// Admin indexes
+db.admins.createIndex({ "email": 1 }, { unique: true, name: "uniq_admin_email" })
+db.admins.createIndex({ "id": 1 }, { unique: true, name: "uniq_admin_id" })
 
 // Account indexes
 db.accounts.createIndex({ "user_id": 1 })
@@ -205,9 +255,9 @@ db.transactions.createIndex({ "account_id": 1 })
 db.transactions.createIndex({ "date": -1 })
 db.transactions.createIndex({ "user_id": 1, "date": -1 })
 
-// User activity indexes
-db.user_activities.createIndex({ "user_id": 1 })
-db.user_activities.createIndex({ "timestamp": -1 })
+// Activity indexes
+db.user_activities.createIndex({ "user_id": 1, "timestamp": -1 }, { name: "user_activity_time" })
+db.admin_activities.createIndex({ "admin_id": 1, "timestamp": -1 }, { name: "admin_activity_time" })
 
 // Account credentials indexes
 db.account_credentials.createIndex({ "account_id": 1 }, { unique: true })
@@ -236,27 +286,34 @@ db.categories.insertMany([
 ## Relationships
 
 1. **users → accounts** (1:N): One user can have multiple financial accounts
-2. **users → transactions** (1:N): One user can have multiple transactions  
+2. **users → transactions** (1:N): One user can have multiple transactions
 3. **users → user_activities** (1:N): One user can have multiple activity log entries
-4. **accounts → transactions** (1:N): One account can have multiple transactions
-5. **accounts → account_credentials** (1:1): Each account has one set of encrypted credentials
-6. **categories → transactions** (1:N): One category can be used by multiple transactions
+4. **admins → admin_activities** (1:N): One admin can have multiple activity log entries
+5. **accounts → transactions** (1:N): One account can have multiple transactions
+6. **accounts → account_credentials** (1:1): Each account has one set of encrypted credentials
+7. **categories → transactions** (1:N): One category can be used by multiple transactions
+8. **admins → admins** (1:N): One super admin can create multiple admin accounts (via created_by)
 
 ## Security Features
 
-- **Password Hashing**: User passwords are hashed using bcrypt
+- **Password Hashing**: User and admin passwords are hashed using bcrypt
 - **Credential Encryption**: Banking credentials are encrypted using Fernet symmetric encryption
-- **JWT Authentication**: Stateless authentication using JWT tokens
-- **Admin Separation**: Admin functions are isolated in separate server/endpoints
-- **Activity Logging**: All user and admin actions are logged for auditing
+- **JWT Authentication**: Stateless authentication using JWT tokens with user_type differentiation
+- **Database Separation**: Admins and users are stored in completely separate collections
+- **Admin Isolation**: Admin functions are isolated in separate server/endpoints (port 8001)
+- **Role-Based Access**: Admin roles (admin, super_admin) with granular permissions
+- **Activity Logging**: Separate audit trails for user and admin actions
+- **Admin Protection**: Admins cannot modify other admin accounts
 
 ## Data Flow
 
-1. **User Registration**: Creates user record with hashed password
-2. **Account Creation**: Creates account record + encrypted credentials
-3. **Transaction Creation**: Updates account balance and creates transaction record
-4. **Admin Actions**: All admin operations are logged in user_activities
-5. **Authentication**: JWT tokens reference user.id for session management
+1. **User Registration**: Creates user record in users collection with hashed password
+2. **Admin Creation**: Creates admin record in admins collection with role and permissions
+3. **Account Creation**: Creates account record + encrypted credentials
+4. **Transaction Creation**: Updates account balance and creates transaction record
+5. **User Actions**: All user operations are logged in user_activities
+6. **Admin Actions**: All admin operations are logged in admin_activities
+7. **Authentication**: JWT tokens include user_type ("user" or "admin") for proper routing
 
 ## Backup and Maintenance
 
@@ -277,6 +334,13 @@ db.stats()
 // Most active users
 db.user_activities.aggregate([
   { $group: { _id: "$user_id", count: { $sum: 1 } } },
+  { $sort: { count: -1 } },
+  { $limit: 10 }
+])
+
+// Most active admins
+db.admin_activities.aggregate([
+  { $group: { _id: "$admin_id", count: { $sum: 1 } } },
   { $sort: { count: -1 } },
   { $limit: 10 }
 ])

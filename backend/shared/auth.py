@@ -20,9 +20,9 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
-def create_access_token(user_id: str, email: str) -> str:
+def create_access_token(user_id: str, email: str, user_type: str = "user") -> str:
     expire = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
-    payload = {"user_id": user_id, "email": email, "exp": expire}
+    payload = {"user_id": user_id, "email": email, "user_type": user_type, "exp": expire}
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -36,10 +36,21 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise HTTPException(status_code=401, detail="Invalid token")
 
 async def get_admin_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    user_id = await get_current_user(credentials)
-    user = await db.users.find_one({"id": user_id})
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        admin_id = payload.get("user_id")
+        user_type = payload.get("user_type")
 
-    if not user or not user.get("is_admin", False):
-        raise HTTPException(status_code=403, detail="Admin access required")
+        if admin_id is None or user_type != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required")
 
-    return user_id
+        # Verify admin exists in admins collection
+        admin = await db.admins.find_one({"id": admin_id})
+
+        if not admin or admin.get("account_status") != "active":
+            raise HTTPException(status_code=403, detail="Admin access denied")
+
+        return admin_id
+
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
