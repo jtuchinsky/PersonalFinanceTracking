@@ -68,32 +68,11 @@ async def create_admin_account():
             print("❌ Invalid email format")
             continue
         
-        # Check if email already exists
-        existing_user = await db.users.find_one({"email": email})
-        if existing_user:
-            if existing_user.get("is_admin", False):
-                print(f"❌ Admin account with email {email} already exists")
-                continue
-            else:
-                # Offer to upgrade existing user to admin
-                upgrade = input(f"User with email {email} already exists. Upgrade to admin? (y/n): ").lower()
-                if upgrade == 'y':
-                    await db.users.update_one(
-                        {"email": email},
-                        {"$set": {
-                            "is_admin": True,
-                            "updated_at": datetime.now(timezone.utc)
-                        }}
-                    )
-                    print(f"✅ User {email} upgraded to admin successfully!")
-                    
-                    # Send welcome email (mock)
-                    print(f"📧 Welcome email would be sent to {email}")
-                    
-                    await client.close()
-                    return True
-                else:
-                    continue
+        # Check if admin email already exists
+        existing_admin = await db.admins.find_one({"email": email})
+        if existing_admin:
+            print(f"❌ Admin account with email {email} already exists")
+            continue
         break
     
     # Name
@@ -124,13 +103,16 @@ async def create_admin_account():
             "email": email,
             "name": name,
             "password": hash_password(password),
-            "is_admin": True,
+            "role": "admin",
+            "permissions": ["user_management", "system_stats", "view_activities"],
             "account_status": "active",
+            "last_login": None,
+            "created_by": None,
             "created_at": datetime.now(timezone.utc),
             "updated_at": datetime.now(timezone.utc)
         }
-        
-        await db.users.insert_one(admin_user)
+
+        await db.admins.insert_one(admin_user)
         print(f"\n✅ Admin account created successfully!")
         print(f"📧 Email: {email}")
         print(f"👤 Name: {name}")
@@ -140,12 +122,12 @@ async def create_admin_account():
         # Log admin creation activity
         activity = {
             "id": str(uuid.uuid4()),
-            "user_id": admin_user["id"],
+            "admin_id": admin_user["id"],
             "action": "admin_account_created",
             "details": f"Admin account created via command line for {email}",
             "timestamp": datetime.now(timezone.utc)
         }
-        await db.user_activities.insert_one(activity)
+        await db.admin_activities.insert_one(activity)
         
         # Mock welcome email
         print(f"\n📧 Mock welcome email sent to {email}")
@@ -181,14 +163,15 @@ async def list_admins():
         client = AsyncIOMotorClient(mongo_url)
         db = client[os.environ.get('DB_NAME', 'finance_tracker')]
         
-        admins = await db.users.find({"is_admin": True}).to_list(length=None)
-        
+        admins = await db.admins.find({}).to_list(length=None)
+
         if not admins:
             print("No admin accounts found.")
         else:
             for admin in admins:
                 status_emoji = "🟢" if admin.get("account_status") == "active" else "🔴"
-                print(f"{status_emoji} {admin['email']} ({admin['name']}) - Created: {admin['created_at']}")
+                role = admin.get("role", "admin")
+                print(f"{status_emoji} {admin['email']} ({admin['name']}) - Role: {role} - Created: {admin['created_at']}")
         
         await client.close()
         

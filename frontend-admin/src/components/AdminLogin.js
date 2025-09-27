@@ -26,13 +26,14 @@ const AdminLogin = () => {
 
       const { access_token, user } = response.data;
 
-      // Check if user is admin
-      if (!user.is_admin) {
-        toast.error('Admin access required');
-        return;
-      }
+      // Admin login - user object is actually an admin object with a role field
+      // Add is_admin flag for frontend compatibility
+      const adminUser = {
+        ...user,
+        is_admin: true
+      };
 
-      login(user, access_token);
+      login(adminUser, access_token);
       toast.success('Successfully logged in as admin!');
     } catch (error) {
       console.error('Login error:', error);
