@@ -118,6 +118,35 @@ def ensure_indexes(db):
     db.categories.create_index([("name", ASCENDING)], name="category_name")
     db.account_credentials.create_index([("account_id", ASCENDING)], unique=True, name="uniq_account_cred")
 
+    # Tenant management indexes
+    db.tenants.create_index([("name", ASCENDING)], unique=True, name="uniq_tenant_name")
+    db.tenants.create_index([("owner_admin_id", ASCENDING)], name="tenant_owner")
+
+    # User invitation indexes
+    db.user_invitations.create_index([("email", ASCENDING), ("tenant_id", ASCENDING)], name="invitation_email_tenant")
+    db.user_invitations.create_index([("invitation_token", ASCENDING)], unique=True, name="uniq_invitation_token")
+    db.user_invitations.create_index([("expires_at", ASCENDING)], name="invitation_expiry")
+
+    # User session indexes
+    db.user_sessions.create_index([("user_id", ASCENDING), ("is_active", ASCENDING)], name="user_active_sessions")
+    db.user_sessions.create_index([("session_token", ASCENDING)], unique=True, name="uniq_session_token")
+    db.user_sessions.create_index([("expires_at", ASCENDING)], name="session_expiry")
+
+    # Connection & sync management indexes
+    db.sync_jobs.create_index([("connection_id", ASCENDING), ("created_at", DESCENDING)], name="connection_sync_jobs")
+    db.sync_jobs.create_index([("user_id", ASCENDING), ("status", ASCENDING)], name="user_sync_status")
+    db.sync_jobs.create_index([("status", ASCENDING), ("created_at", ASCENDING)], name="sync_job_queue")
+
+    # Import job indexes
+    db.import_jobs.create_index([("user_id", ASCENDING), ("created_at", DESCENDING)], name="user_import_history")
+    db.import_jobs.create_index([("tenant_id", ASCENDING), ("status", ASCENDING)], name="tenant_import_status")
+    db.import_jobs.create_index([("status", ASCENDING), ("created_at", ASCENDING)], name="import_job_queue")
+
+    # Data integrity check indexes
+    db.data_integrity_checks.create_index([("check_type", ASCENDING), ("created_at", DESCENDING)], name="integrity_check_history")
+    db.data_integrity_checks.create_index([("tenant_id", ASCENDING), ("status", ASCENDING)], name="tenant_integrity_status")
+    db.data_integrity_checks.create_index([("created_by", ASCENDING), ("created_at", DESCENDING)], name="admin_integrity_checks")
+
 import uuid
 
 def upsert_user(db, email, name, password):
@@ -232,6 +261,24 @@ def main():
     ensure_coll(db, "transactions", transaction_schema, force=args.force)
     ensure_coll(db, "categories", category_schema, force=args.force)
     ensure_coll(db, "account_credentials", credentials_schema, force=args.force)
+
+    # Tenant management collections
+    tenant_schema = {"bsonType": "object", "required": ["id", "name", "owner_admin_id", "status", "created_at", "updated_at"]}
+    invitation_schema = {"bsonType": "object", "required": ["id", "email", "tenant_id", "role", "invited_by_admin_id", "status", "invitation_token", "expires_at", "created_at"]}
+    session_schema = {"bsonType": "object", "required": ["id", "user_id", "session_token", "created_at", "expires_at", "is_active"]}
+
+    ensure_coll(db, "tenants", tenant_schema, force=args.force)
+    ensure_coll(db, "user_invitations", invitation_schema, force=args.force)
+    ensure_coll(db, "user_sessions", session_schema, force=args.force)
+
+    # Connection & sync management collections
+    sync_job_schema = {"bsonType": "object", "required": ["id", "connection_id", "user_id", "job_type", "status", "created_at"]}
+    import_job_schema = {"bsonType": "object", "required": ["id", "user_id", "import_type", "status", "created_by", "created_at"]}
+    integrity_check_schema = {"bsonType": "object", "required": ["id", "check_type", "status", "created_by", "created_at"]}
+
+    ensure_coll(db, "sync_jobs", sync_job_schema, force=args.force)
+    ensure_coll(db, "import_jobs", import_job_schema, force=args.force)
+    ensure_coll(db, "data_integrity_checks", integrity_check_schema, force=args.force)
 
     ensure_indexes(db)
 

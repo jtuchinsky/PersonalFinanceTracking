@@ -20,12 +20,14 @@ The Finance Tracker includes a comprehensive admin system that allows administra
 - **Transaction Statistics**: Total transactions in the system
 - **Real-time Monitoring**: Live system activity feeds
 
-#### **User Management**
-- **View All Users**: Complete list of all registered users
-- **User Details**: Name, email, account status, financial summary
+#### **User Management (Privacy-First)**
+- **View All Users**: Complete list of all registered users (NO financial data exposed)
+- **User Details**: Name, email, account status, tenant affiliation, 2FA status
 - **Account Control**: Lock/unlock user accounts
 - **Account Deletion**: Permanently delete user accounts
 - **Admin Protection**: Prevents modification of other admin accounts
+- **Session Monitoring**: View user's active sessions and last login activity
+- **2FA Management**: Reset user's two-factor authentication when needed
 
 #### **Activity Monitoring**
 - **System Activity Logs**: Complete audit trail of all user and admin actions
@@ -175,6 +177,101 @@ Content: Welcome message with admin privileges and responsibilities
 - **Status Monitoring**: Delivery status tracking
 - **Admin Review**: Email logs accessible through admin panel
 
+## 🏢 User & Tenant Lifecycle Management (NEW)
+
+### Multi-Tenant Architecture
+- **Tenant Creation**: Admins can create new organizational tenants
+- **Tenant Management**: View and manage all active tenants
+- **Isolated Data**: Each tenant's data is completely separated
+- **Scalable Design**: Ready for SaaS multi-tenant deployment
+
+### User Invitation System
+- **Email Invitations**: Send secure invitation emails to new users
+- **Role Assignment**: Assign user roles during invitation (user, tenant_admin)
+- **Expiry Management**: Invitations expire after 7 days automatically
+- **Resend Capability**: Resend invitations for pending users
+- **Token Security**: Unique invitation tokens prevent unauthorized access
+
+### Enhanced User Management
+- **Privacy-First Design**: Admins CANNOT see user financial data (balances, amounts)
+- **Tenant Filtering**: Filter users by tenant organization
+- **Session Monitoring**: View user's active sessions and last login activity
+- **2FA Management**: Reset user's two-factor authentication
+- **Advanced Security**: Monitor user sessions across devices
+
+### User Lifecycle Features
+- **Account Creation**: Create user accounts through invitation system
+- **Account Modification**: Lock/unlock user accounts with notifications
+- **Account Deletion**: Permanently remove users with complete data cleanup
+- **Status Tracking**: Monitor user account status changes over time
+- **Audit Compliance**: Complete audit trail for regulatory compliance
+
+### New Email Templates
+- **User Invitation**: Welcome new users with secure invitation links
+- **Invitation Reminder**: Resend invitations for pending users
+- **2FA Reset Notification**: Inform users when 2FA is reset by admin
+- **Account Status Changes**: Enhanced notifications for all account changes
+- **Bank Re-authentication**: Notify users when bank connections require re-authentication
+
+## 🔗 Connection & Sync Health Management (NEW)
+
+### Bank & Broker Connection Monitoring
+- **Connection Overview**: View all user bank and broker connections across the platform
+- **Real-time Status**: Monitor connection health, sync status, and error conditions
+- **Institution Tracking**: Track connections by financial institution and connection type
+- **Privacy-First Design**: View connection metadata without accessing user financial data
+
+### Connection Management Features
+- **Manual Sync Trigger**: Force immediate synchronization for troubleshooting
+- **Re-authentication Links**: Generate secure re-auth links for expired connections
+- **Sync Job History**: View detailed sync job logs and status for each connection
+- **Error Monitoring**: Track sync errors and connection failures for proactive support
+
+### Admin Connection Controls
+```
+Connection Actions Available:
+- Manual sync trigger with optional full-sync mode
+- Generate secure re-authentication links for users
+- View sync job history and status tracking
+- Monitor connection health across all users
+- Filter connections by tenant, status, or institution
+```
+
+### Connection Status Tracking
+- **Active Connections**: Healthy, syncing connections
+- **Error Connections**: Connections with sync errors or failures
+- **Expired Connections**: Connections requiring user re-authentication
+- **Disconnected Connections**: Inactive or disabled connections
+
+## 📊 Data Integrity & Quality Management (NEW)
+
+### Automated Integrity Checks
+- **Duplicate Detection**: Identify and report duplicate transactions
+- **Orphaned Transaction Cleanup**: Find transactions without valid account references
+- **Balance Reconciliation**: Detect account balance mismatches
+- **Category Validation**: Verify transaction category consistency
+
+### Data Quality Monitoring
+- **Real-time Checks**: Run integrity checks on-demand or scheduled
+- **Issue Reporting**: Detailed reports of data quality issues found
+- **Trend Analysis**: Track data quality improvements over time
+- **Compliance Readiness**: Ensure data meets regulatory standards
+
+### Integrity Check Types
+```
+Available Integrity Checks:
+- Duplicates: Find duplicate transactions across accounts
+- Orphaned Transactions: Identify transactions without valid accounts
+- Balance Mismatch: Detect inconsistencies in account balances
+- Category Validation: Verify transaction categorization accuracy
+```
+
+### Data Integrity Dashboard
+- **Check History**: View all integrity checks with timestamps and results
+- **Issue Summary**: Summary of issues found and resolution status
+- **Automated Reports**: Detailed reports of data quality metrics
+- **Resolution Tracking**: Monitor progress on data quality improvements
+
 ## 🔒 Security Features
 
 ### Authentication & Authorization
@@ -234,16 +331,39 @@ Activity Types Tracked:
 ### Admin API Endpoints (Port 8001)
 ```
 # Authentication
-POST /api/auth/login        - Admin login (separate from user login)
+POST /api/auth/login                        - Admin login (separate from user login)
 
-# Admin Management
-GET  /api/admin/stats       - System statistics
-GET  /api/admin/users       - User management list
-GET  /api/admin/activities  - Activity logs
-GET  /api/admin/emails      - Email notification logs
-POST /api/admin/users/{id}/lock   - Lock user account
-POST /api/admin/users/{id}/unlock - Unlock user account
-DELETE /api/admin/users/{id}      - Delete user account
+# Tenant Management (NEW)
+POST /api/admin/tenants                     - Create new tenant
+GET  /api/admin/tenants                     - List all active tenants
+
+# User Invitation System (NEW)
+POST /api/admin/users/invite                - Invite user to join tenant
+POST /api/admin/users/invite/{id}/resend    - Resend invitation email
+
+# Enhanced User Management (Privacy-First)
+GET  /api/admin/users?tenantId=...          - User list (NO financial data)
+POST /api/admin/users/{id}/lock             - Lock user account
+POST /api/admin/users/{id}/unlock           - Unlock user account
+POST /api/admin/users/{id}/reset-2fa        - Reset user's 2FA
+GET  /api/admin/users/{id}/sessions         - View user's active sessions
+DELETE /api/admin/users/{id}                - Delete user account
+
+# System Monitoring
+GET  /api/admin/stats                       - System statistics
+GET  /api/admin/activities                  - Activity logs
+GET  /api/admin/emails                      - Email notification logs
+
+# Connection & Sync Management (NEW)
+GET  /api/admin/connections?tenantId=...    - Bank/broker connections overview
+POST /api/admin/connections/{id}/sync       - Trigger manual sync for connection
+POST /api/admin/connections/{id}/reauth-link - Generate re-authentication link
+GET  /api/admin/connections/{id}/sync-jobs  - View sync job history
+
+# Data Integrity Management (NEW)
+GET  /api/admin/imports?tenantId=...        - Data import job history
+POST /api/admin/integrity-checks           - Run data integrity checks
+GET  /api/admin/integrity-checks?tenantId=... - View integrity check results
 ```
 
 ### Frontend Architecture
@@ -267,14 +387,29 @@ ENCRYPTION_KEY=your-encryption-key
 
 ### Database Collections
 ```
+# Core User Management
 users               - Regular user accounts (no admin flags)
 admins              - Admin accounts with roles and permissions
+
+# Multi-Tenant Support (NEW)
+tenants             - Organizational tenants for SaaS model
+user_invitations    - Email-based user invitation system
+user_sessions       - User session tracking for admin monitoring
+
+# Audit & Compliance
 user_activities     - User action audit logs
 admin_activities    - Admin action audit logs
+
+# Financial Data (User-Only Access)
 accounts           - Financial accounts
 transactions       - Financial transactions
 categories         - Expense categories
 account_credentials - Encrypted banking credentials
+
+# Connection & Data Management (NEW)
+sync_jobs          - Sync job tracking and history
+import_jobs        - Data import job tracking
+data_integrity_checks - Data quality check results
 ```
 
 ### Maintenance Tasks
@@ -365,6 +500,21 @@ The system is designed to be intuitive, secure, and scalable, providing administ
 
 ---
 
-**Last Updated**: September 25, 2025
-**Version**: 2.0 - Database Architecture Separation Update
+**Last Updated**: September 26, 2025
+**Version**: 2.2 - Complete Admin System with Connection & Data Management
 **Author**: Finance Tracker Development Team
+
+### 🆕 Version 2.2 Features (NEW)
+- **Connection & Sync Health Management**: Complete bank/broker connection monitoring and control
+- **Data Integrity & Quality Management**: Automated data quality checks and monitoring
+- **Manual Sync Control**: Admin-triggered synchronization for troubleshooting
+- **Re-authentication Management**: Secure link generation for expired connections
+- **Comprehensive Data Validation**: Multi-type integrity checks for data quality assurance
+
+### 🔄 Version 2.1 Features
+- **Multi-Tenant Architecture**: Full SaaS-ready tenant management system
+- **User Invitation System**: Email-based secure user invitations with expiry
+- **Privacy-First User Management**: Admin interfaces with zero financial data exposure
+- **Enhanced Session Monitoring**: Real-time user session tracking across devices
+- **2FA Management**: Admin capability to reset user two-factor authentication
+- **Advanced Audit Logging**: Comprehensive compliance-ready activity tracking
