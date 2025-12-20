@@ -8,7 +8,8 @@ from datetime import datetime, timezone
 from shared.database import db, shutdown_db_client
 from shared.auth import get_admin_user, verify_password, create_access_token
 from shared.models import (
-    AdminStats, UserManagement, UserActivity, AdminLogin, Admin, AdminActivity,
+    AdminStats, UserManagement, UserActivity, AdminLogin, AdminLoginWith2FA, Admin, AdminActivity,
+    Admin2FASetup, Admin2FAVerify, Admin2FADisable, AdminLoginSMSEmail, SendVerificationCode,
     Tenant, TenantCreate, UserInvitation, InviteUser, UserManagementSecure, UserSession,
     ConnectionStatus, SyncJobRequest, ReauthRequest, SyncJob, ImportJob, DataIntegrityCheck
 )
@@ -23,7 +24,9 @@ auth_router = APIRouter(prefix="/api/auth")
 
 # Admin authentication routes
 @auth_router.post("/login")
-async def admin_login(login_data: AdminLogin):
+async def admin_login(login_data: AdminLoginWith2FA):
+    from shared.twofa import verify_totp, verify_backup_code
+
     admin = await db.admins.find_one({"email": login_data.email})
     if not admin or not verify_password(login_data.password, admin["password"]):
         # Log failed login attempt
@@ -54,6 +57,46 @@ async def admin_login(login_data: AdminLogin):
         await db.admin_activities.insert_one(activity.dict())
         raise HTTPException(status_code=403, detail="Account not found.")
 
+    # Check 2FA if enabled
+    if admin.get("two_factor_enabled", False):
+        if not login_data.totp_code:
+            # Return indication that 2FA is required
+            activity = AdminActivity(
+                admin_id=admin["id"],
+                action="admin_login_2fa_required",
+                details="Admin login requires 2FA verification"
+            )
+            await db.admin_activities.insert_one(activity.dict())
+            return {
+                "requires_2fa": True,
+                "message": "Two-factor authentication required"
+            }
+
+        # Verify TOTP code first
+        totp_valid = verify_totp(admin.get("two_factor_secret"), login_data.totp_code)
+        backup_code_valid = False
+
+        if not totp_valid:
+            # Try backup code if TOTP fails
+            backup_codes = admin.get("backup_codes", [])
+            if backup_codes:
+                backup_code_valid, updated_backup_codes = verify_backup_code(backup_codes, login_data.totp_code)
+                if backup_code_valid:
+                    # Update backup codes (remove used code)
+                    await db.admins.update_one(
+                        {"id": admin["id"]},
+                        {"$set": {"backup_codes": updated_backup_codes}}
+                    )
+
+        if not totp_valid and not backup_code_valid:
+            activity = AdminActivity(
+                admin_id=admin["id"],
+                action="failed_admin_2fa",
+                details="Admin login failed - invalid 2FA code"
+            )
+            await db.admin_activities.insert_one(activity.dict())
+            raise HTTPException(status_code=401, detail="Invalid two-factor authentication code")
+
     # Update last login
     await db.admins.update_one(
         {"id": admin["id"]},
@@ -62,17 +105,219 @@ async def admin_login(login_data: AdminLogin):
 
     # Create admin token
     token = create_access_token(admin["id"], admin["email"], user_type="admin")
-    admin_obj = Admin(**{k: v for k, v in admin.items() if k != "password"})
+    admin_obj = Admin(**{k: v for k, v in admin.items() if k not in ["password", "two_factor_secret", "backup_codes"]})
 
     # Log successful admin login
+    login_method = "2FA" if admin.get("two_factor_enabled", False) else "password"
     activity = AdminActivity(
         admin_id=admin["id"],
         action="admin_login",
-        details="Admin logged in successfully"
+        details=f"Admin logged in successfully using {login_method}"
     )
     await db.admin_activities.insert_one(activity.dict())
 
     return {"access_token": token, "token_type": "bearer", "user": admin_obj}
+
+# Enhanced login endpoint with SMS/Email 2FA support
+@auth_router.post("/login-enhanced")
+async def admin_login_enhanced(login_data: AdminLoginSMSEmail):
+    """Enhanced admin login supporting TOTP, SMS, and Email 2FA"""
+    from shared.twofa import verify_totp, verify_backup_code
+    from shared.sms_email_2fa import sms_email_2fa
+
+    admin = await db.admins.find_one({"email": login_data.email})
+    if not admin or not verify_password(login_data.password, admin["password"]):
+        # Log failed login attempt
+        activity = AdminActivity(
+            admin_id="unknown",
+            action="failed_admin_login",
+            details=f"Failed admin login attempt for {login_data.email}"
+        )
+        await db.admin_activities.insert_one(activity.dict())
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Check account status
+    if admin.get("account_status", "active") == "locked":
+        activity = AdminActivity(
+            admin_id=admin["id"],
+            action="admin_login_blocked",
+            details="Admin login attempt on locked account"
+        )
+        await db.admin_activities.insert_one(activity.dict())
+        raise HTTPException(status_code=403, detail="Account is locked. Please contact system administrator.")
+
+    if admin.get("account_status", "active") == "deleted":
+        activity = AdminActivity(
+            admin_id=admin["id"],
+            action="admin_login_blocked",
+            details="Admin login attempt on deleted account"
+        )
+        await db.admin_activities.insert_one(activity.dict())
+        raise HTTPException(status_code=403, detail="Account not found.")
+
+    # Check 2FA if enabled
+    if admin.get("two_factor_enabled", False):
+        two_factor_type = admin.get("two_factor_type", "totp")
+
+        if not login_data.verification_code:
+            # Send verification code based on 2FA type
+            if two_factor_type == "email":
+                # Send email verification code
+                verification_code = await sms_email_2fa.send_email_code(admin["email"], admin["name"])
+
+                activity = AdminActivity(
+                    admin_id=admin["id"],
+                    action="admin_login_email_code_sent",
+                    details="Email verification code sent for admin login"
+                )
+                await db.admin_activities.insert_one(activity.dict())
+
+                return {
+                    "requires_2fa": True,
+                    "two_factor_type": "email",
+                    "message": "Verification code sent to your email address",
+                    "code_sent": True
+                }
+            elif two_factor_type == "sms":
+                # Send SMS verification code
+                phone_number = admin.get("phone_number")
+                if not phone_number:
+                    raise HTTPException(status_code=400, detail="Phone number not configured for SMS 2FA")
+
+                verification_code = await sms_email_2fa.send_sms_code(phone_number, admin["name"])
+
+                activity = AdminActivity(
+                    admin_id=admin["id"],
+                    action="admin_login_sms_code_sent",
+                    details="SMS verification code sent for admin login"
+                )
+                await db.admin_activities.insert_one(activity.dict())
+
+                return {
+                    "requires_2fa": True,
+                    "two_factor_type": "sms",
+                    "message": "Verification code sent to your phone",
+                    "code_sent": True
+                }
+            else:
+                # TOTP (existing behavior)
+                activity = AdminActivity(
+                    admin_id=admin["id"],
+                    action="admin_login_2fa_required",
+                    details="Admin login requires TOTP 2FA verification"
+                )
+                await db.admin_activities.insert_one(activity.dict())
+                return {
+                    "requires_2fa": True,
+                    "two_factor_type": "totp",
+                    "message": "Enter code from your authenticator app"
+                }
+
+        # Verify the provided code based on 2FA type
+        verification_valid = False
+
+        if two_factor_type == "email":
+            verification_valid = sms_email_2fa.verify_code(admin["email"], login_data.verification_code)
+        elif two_factor_type == "sms":
+            phone_number = admin.get("phone_number")
+            if phone_number:
+                verification_valid = sms_email_2fa.verify_code(phone_number, login_data.verification_code)
+        else:
+            # TOTP verification (existing logic)
+            verification_valid = verify_totp(admin.get("two_factor_secret"), login_data.verification_code)
+
+            if not verification_valid:
+                # Try backup code if TOTP fails
+                backup_codes = admin.get("backup_codes", [])
+                if backup_codes:
+                    verification_valid, updated_backup_codes = verify_backup_code(backup_codes, login_data.verification_code)
+                    if verification_valid:
+                        # Update backup codes (remove used code)
+                        await db.admins.update_one(
+                            {"id": admin["id"]},
+                            {"$set": {"backup_codes": updated_backup_codes}}
+                        )
+
+        if not verification_valid:
+            activity = AdminActivity(
+                admin_id=admin["id"],
+                action="failed_admin_2fa",
+                details=f"Admin login failed - invalid {two_factor_type} verification code"
+            )
+            await db.admin_activities.insert_one(activity.dict())
+            raise HTTPException(status_code=401, detail="Invalid verification code")
+
+    # Update last login
+    await db.admins.update_one(
+        {"id": admin["id"]},
+        {"$set": {"last_login": datetime.now(timezone.utc)}}
+    )
+
+    # Create admin token
+    token = create_access_token(admin["id"], admin["email"], user_type="admin")
+    admin_obj = Admin(**{k: v for k, v in admin.items() if k not in ["password", "two_factor_secret", "backup_codes"]})
+
+    # Log successful admin login
+    login_method = f"{admin.get('two_factor_type', 'password')}_2fa" if admin.get("two_factor_enabled", False) else "password"
+    activity = AdminActivity(
+        admin_id=admin["id"],
+        action="admin_login",
+        details=f"Admin logged in successfully using {login_method}"
+    )
+    await db.admin_activities.insert_one(activity.dict())
+
+    return {"access_token": token, "token_type": "bearer", "user": admin_obj}
+
+# Endpoint to send verification codes
+@auth_router.post("/send-verification-code")
+async def send_verification_code(send_request: SendVerificationCode):
+    """Send verification code via SMS or Email"""
+    from shared.sms_email_2fa import sms_email_2fa
+
+    admin = await db.admins.find_one({"email": send_request.email})
+    if not admin:
+        # Don't reveal that admin doesn't exist for security
+        return {"message": "If an account exists, a verification code has been sent", "code_sent": True}
+
+    if not admin.get("two_factor_enabled", False):
+        raise HTTPException(status_code=400, detail="Two-factor authentication is not enabled for this account")
+
+    if send_request.method == "email":
+        verification_code = await sms_email_2fa.send_email_code(admin["email"], admin["name"])
+
+        activity = AdminActivity(
+            admin_id=admin["id"],
+            action="verification_code_sent",
+            details="Email verification code sent on demand"
+        )
+        await db.admin_activities.insert_one(activity.dict())
+
+        return {
+            "message": "Verification code sent to your email address",
+            "code_sent": True,
+            "method": "email"
+        }
+    elif send_request.method == "sms":
+        phone_number = admin.get("phone_number")
+        if not phone_number:
+            raise HTTPException(status_code=400, detail="Phone number not configured for SMS")
+
+        verification_code = await sms_email_2fa.send_sms_code(phone_number, admin["name"])
+
+        activity = AdminActivity(
+            admin_id=admin["id"],
+            action="verification_code_sent",
+            details="SMS verification code sent on demand"
+        )
+        await db.admin_activities.insert_one(activity.dict())
+
+        return {
+            "message": "Verification code sent to your phone",
+            "code_sent": True,
+            "method": "sms"
+        }
+    else:
+        raise HTTPException(status_code=400, detail="Invalid verification method. Use 'email' or 'sms'")
 
 # Create a router with the /api/admin prefix
 admin_router = APIRouter(prefix="/api/admin")
@@ -848,6 +1093,200 @@ async def get_sent_emails(admin_id: str = Depends(get_admin_user)):
     await log_user_activity(admin_id, "admin_view_emails", "Admin viewed sent emails log")
 
     return {"sent_emails": email_service.sent_emails}
+
+# Admin 2FA Management Routes
+@admin_router.post("/2fa/setup", response_model=Admin2FASetup)
+async def setup_admin_2fa(admin_id: str = Depends(get_admin_user)):
+    """Setup 2FA for admin account"""
+    from shared.twofa import generate_secret, generate_qr_code, generate_backup_codes
+
+    admin = await db.admins.find_one({"id": admin_id})
+    if not admin:
+        raise HTTPException(status_code=404, detail="Admin not found")
+
+    if admin.get("two_factor_enabled", False):
+        raise HTTPException(status_code=400, detail="Two-factor authentication is already enabled")
+
+    # Generate new secret and backup codes
+    secret = generate_secret()
+    qr_code_url = generate_qr_code(admin["email"], secret)
+    backup_codes = generate_backup_codes()
+
+    # Store temporary secret (not enabled until verified)
+    await db.admins.update_one(
+        {"id": admin_id},
+        {"$set": {
+            "two_factor_secret": secret,
+            "backup_codes": backup_codes,
+            "updated_at": datetime.now(timezone.utc)
+        }}
+    )
+
+    # Log admin activity
+    activity = AdminActivity(
+        admin_id=admin_id,
+        action="setup_2fa_initiated",
+        details="Admin initiated 2FA setup"
+    )
+    await db.admin_activities.insert_one(activity.dict())
+
+    return Admin2FASetup(
+        secret=secret,
+        qr_code_url=qr_code_url,
+        backup_codes=backup_codes
+    )
+
+@admin_router.post("/2fa/verify")
+async def verify_admin_2fa(verify_data: Admin2FAVerify, admin_id: str = Depends(get_admin_user)):
+    """Verify and enable 2FA for admin account"""
+    from shared.twofa import verify_totp
+
+    admin = await db.admins.find_one({"id": admin_id})
+    if not admin:
+        raise HTTPException(status_code=404, detail="Admin not found")
+
+    if admin.get("two_factor_enabled", False):
+        raise HTTPException(status_code=400, detail="Two-factor authentication is already enabled")
+
+    secret = admin.get("two_factor_secret")
+    if not secret:
+        raise HTTPException(status_code=400, detail="2FA setup not initiated. Please setup 2FA first.")
+
+    # Verify TOTP code
+    if not verify_totp(secret, verify_data.totp_code):
+        activity = AdminActivity(
+            admin_id=admin_id,
+            action="2fa_verification_failed",
+            details="Admin 2FA verification failed - invalid code"
+        )
+        await db.admin_activities.insert_one(activity.dict())
+        raise HTTPException(status_code=400, detail="Invalid verification code")
+
+    # Enable 2FA
+    await db.admins.update_one(
+        {"id": admin_id},
+        {"$set": {
+            "two_factor_enabled": True,
+            "updated_at": datetime.now(timezone.utc)
+        }}
+    )
+
+    # Log successful 2FA setup
+    activity = AdminActivity(
+        admin_id=admin_id,
+        action="2fa_enabled",
+        details="Admin successfully enabled 2FA"
+    )
+    await db.admin_activities.insert_one(activity.dict())
+
+    return {"message": "Two-factor authentication enabled successfully"}
+
+@admin_router.post("/2fa/disable")
+async def disable_admin_2fa(disable_data: Admin2FADisable, admin_id: str = Depends(get_admin_user)):
+    """Disable 2FA for admin account"""
+    from shared.twofa import verify_totp, verify_backup_code
+
+    admin = await db.admins.find_one({"id": admin_id})
+    if not admin:
+        raise HTTPException(status_code=404, detail="Admin not found")
+
+    if not admin.get("two_factor_enabled", False):
+        raise HTTPException(status_code=400, detail="Two-factor authentication is not enabled")
+
+    # Verify password
+    if not verify_password(disable_data.password, admin["password"]):
+        activity = AdminActivity(
+            admin_id=admin_id,
+            action="2fa_disable_failed",
+            details="Admin 2FA disable failed - invalid password"
+        )
+        await db.admin_activities.insert_one(activity.dict())
+        raise HTTPException(status_code=401, detail="Invalid password")
+
+    # Verify 2FA code (TOTP or backup code)
+    verification_valid = False
+
+    if disable_data.totp_code:
+        verification_valid = verify_totp(admin.get("two_factor_secret"), disable_data.totp_code)
+    elif disable_data.backup_code:
+        backup_codes = admin.get("backup_codes", [])
+        verification_valid, _ = verify_backup_code(backup_codes, disable_data.backup_code)
+
+    if not verification_valid:
+        activity = AdminActivity(
+            admin_id=admin_id,
+            action="2fa_disable_failed",
+            details="Admin 2FA disable failed - invalid 2FA code"
+        )
+        await db.admin_activities.insert_one(activity.dict())
+        raise HTTPException(status_code=400, detail="Invalid two-factor authentication code")
+
+    # Disable 2FA
+    await db.admins.update_one(
+        {"id": admin_id},
+        {"$set": {
+            "two_factor_enabled": False,
+            "two_factor_secret": None,
+            "backup_codes": None,
+            "updated_at": datetime.now(timezone.utc)
+        }}
+    )
+
+    # Log 2FA disabled
+    activity = AdminActivity(
+        admin_id=admin_id,
+        action="2fa_disabled",
+        details="Admin disabled 2FA"
+    )
+    await db.admin_activities.insert_one(activity.dict())
+
+    return {"message": "Two-factor authentication disabled successfully"}
+
+@admin_router.get("/2fa/status")
+async def get_admin_2fa_status(admin_id: str = Depends(get_admin_user)):
+    """Get admin 2FA status"""
+    admin = await db.admins.find_one({"id": admin_id})
+    if not admin:
+        raise HTTPException(status_code=404, detail="Admin not found")
+
+    return {
+        "two_factor_enabled": admin.get("two_factor_enabled", False),
+        "backup_codes_remaining": len(admin.get("backup_codes", [])) if admin.get("backup_codes") else 0
+    }
+
+@admin_router.post("/2fa/regenerate-backup-codes")
+async def regenerate_backup_codes(admin_id: str = Depends(get_admin_user)):
+    """Regenerate backup codes for admin"""
+    from shared.twofa import generate_backup_codes
+
+    admin = await db.admins.find_one({"id": admin_id})
+    if not admin:
+        raise HTTPException(status_code=404, detail="Admin not found")
+
+    if not admin.get("two_factor_enabled", False):
+        raise HTTPException(status_code=400, detail="Two-factor authentication is not enabled")
+
+    # Generate new backup codes
+    new_backup_codes = generate_backup_codes()
+
+    # Update admin with new backup codes
+    await db.admins.update_one(
+        {"id": admin_id},
+        {"$set": {
+            "backup_codes": new_backup_codes,
+            "updated_at": datetime.now(timezone.utc)
+        }}
+    )
+
+    # Log backup code regeneration
+    activity = AdminActivity(
+        admin_id=admin_id,
+        action="backup_codes_regenerated",
+        details="Admin regenerated 2FA backup codes"
+    )
+    await db.admin_activities.insert_one(activity.dict())
+
+    return {"backup_codes": new_backup_codes, "message": "Backup codes regenerated successfully"}
 
 # Include the routers in the main app
 app.include_router(auth_router)

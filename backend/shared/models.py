@@ -19,6 +19,11 @@ class Admin(BaseModel):
     role: str = "admin"  # admin, super_admin
     permissions: List[str] = Field(default_factory=list)  # specific permissions
     account_status: str = "active"  # active, locked, deleted
+    two_factor_enabled: bool = False
+    two_factor_type: Optional[str] = None  # "totp", "sms", "email"
+    two_factor_secret: Optional[str] = None  # TOTP secret
+    backup_codes: Optional[List[str]] = None
+    phone_number: Optional[str] = None  # for SMS 2FA
     last_login: Optional[datetime] = None
     created_by: Optional[str] = None  # admin ID who created this admin
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -43,6 +48,44 @@ class AdminCreate(BaseModel):
 class AdminLogin(BaseModel):
     email: EmailStr
     password: str
+
+class AdminLoginWith2FA(BaseModel):
+    email: EmailStr
+    password: str
+    totp_code: Optional[str] = None
+
+class Admin2FASetup(BaseModel):
+    """Response for 2FA setup"""
+    secret: str
+    qr_code_url: str
+    backup_codes: List[str]
+
+class Admin2FAVerify(BaseModel):
+    """Request to verify and enable 2FA"""
+    totp_code: str
+
+class Admin2FADisable(BaseModel):
+    """Request to disable 2FA"""
+    password: str
+    totp_code: Optional[str] = None
+    backup_code: Optional[str] = None
+
+class AdminLoginSMSEmail(BaseModel):
+    """Enhanced admin login with SMS/Email 2FA support"""
+    email: EmailStr
+    password: str
+    verification_code: Optional[str] = None  # SMS/Email verification code
+    two_fa_method: Optional[str] = None  # "sms", "email", "totp"
+
+class Admin2FAMethodSetup(BaseModel):
+    """Setup 2FA method preference"""
+    method: str  # "totp", "sms", "email"
+    phone_number: Optional[str] = None  # required for SMS
+
+class SendVerificationCode(BaseModel):
+    """Request to send verification code"""
+    email: EmailStr
+    method: str  # "sms", "email"
 
 class Account(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
